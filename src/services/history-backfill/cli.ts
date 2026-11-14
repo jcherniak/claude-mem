@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { chmodSync, createWriteStream, existsSync, mkdirSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
+import { completeLines } from './lines.js';
 import { parseArgs } from 'node:util';
 import { discoverHistoricalSources } from './sources.js';
 import { HISTORICAL_MODEL, historicalHash, runHistoricalBackfill, type Snapshot } from './runner.js';
@@ -58,7 +58,7 @@ async function scan(directory: string, hosts: string[]): Promise<void> {
     let hasher = createHash('sha256');
     let events = 0;
     try {
-      for await (const line of createInterface({ input: child.stdout, crlfDelay: Infinity })) {
+      for await (const line of completeLines(child.stdout)) {
         const record = JSON.parse(line);
         if (record.begin) {
           if (current) throw new Error('Historical export source did not finish');

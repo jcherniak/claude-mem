@@ -3,6 +3,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Database } from 'bun:sqlite';
+import { Readable } from 'node:stream';
+import { completeLines } from '../src/services/history-backfill/lines.js';
 import { historicalHash, HistoricalJournal, runHistoricalBackfill, type HistoricalResult, type Snapshot } from '../src/services/history-backfill/runner.js';
 import { discoverHistoricalSources, nativeJsonlEvents, redactHistoricalText, sanitizeEvents, type HistoricalEvent } from '../src/services/history-backfill/sources.js';
 
@@ -77,6 +79,14 @@ describe('explicit historical workflow', () => {
 });
 
 describe('historical source privacy and native schemas', () => {
+  it('preserves long UTF-8 records across chunks and asynchronous consumer delays', async () => {
+    const records = Array.from({ length: 20 }, (_, index) => JSON.stringify({ index, text: 'source ☃ '.repeat(3000) }));
+    const bytes = Buffer.from(records.join('\n')+'\n'); const chunks = [];
+    for (let offset = 0; offset < bytes.length; offset += 8191) chunks.push(bytes.subarray(offset, offset+8191));
+    const received = [];
+    for await (const line of completeLines(Readable.from(chunks))) { await new Promise(resolve => setTimeout(resolve, 1)); received.push(line); }
+    expect(received).toEqual(records);
+  });
   it('removes sync tokens, API tokens, private sections and private keys', () => {
     const text = redactHistoricalText('cmem_sync_testsecret <private>hidden</private> Bearer secret.token sk-abcdefghijklmnopqrst -----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----');
     for (const secret of ['testsecret', 'hidden', 'secret.token', 'abcdefghijklmnopqrst', '\nkey\n']) expect(text).not.toContain(secret);

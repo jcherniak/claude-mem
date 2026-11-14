@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { completeLines } from './lines.js';
 import { basename, dirname, join } from 'node:path';
 import { Database } from 'bun:sqlite';
 import { spawn } from 'node:child_process';
@@ -40,10 +40,9 @@ function sourceTimestamp(value: unknown): string | undefined {
 
 export async function* jsonLines(path: string, report?: (message: string) => void): AsyncGenerator<any> {
   const stream = createReadStream(path);
-  const lines = createInterface({ input: stream, crlfDelay: Infinity });
   try {
     let number = 0;
-    for await (const line of lines) {
+    for await (const line of completeLines(stream)) {
       number++;
       if (!line.trim()) continue;
       try { yield JSON.parse(line); }
@@ -53,7 +52,7 @@ export async function* jsonLines(path: string, report?: (message: string) => voi
         yield { historicalGap: number };
       }
     }
-  } finally { lines.close(); stream.destroy(); }
+  } finally { stream.destroy(); }
 }
 
 function* files(root: string, accept: (path: string) => boolean): Generator<string> {
@@ -141,16 +140,15 @@ finally:
     child.once('close', code => code === 0 ? resolve() : reject(new Error('Cursor database could not be read with Python SQLite')));
   });
   void complete.catch(() => {});
-  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   try {
-    for await (const line of lines) {
+    for await (const line of completeLines(child.stdout)) {
       const message = JSON.parse(line);
       yield message;
       if (message.historicalPassEnd && message.passIndex === 0) child.stdin.write('\n');
     }
     await complete;
   }
-  finally { lines.close(); child.stdout.destroy(); child.kill(); }
+  finally { child.stdout.destroy(); child.kill(); }
 }
 
 export async function* discoverHistoricalSources(home: string, report: (message: string) => void): AsyncGenerator<HistoricalSource> {

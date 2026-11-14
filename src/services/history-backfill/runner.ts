@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Database } from 'bun:sqlite';
 import { redactHistoricalText, type HistoricalEvent } from './sources.js';
+import { completeLines } from './lines.js';
 
 export const HISTORICAL_MODEL = 'gpt-6-luna';
 export interface Snapshot {
@@ -156,11 +157,11 @@ export async function runHistoricalBackfill(options: {
       };
       if (checkpoint.output && !await flush()) return result;
       const hasher = createHash('sha256');
-      for await (const line of createInterface({ input: createReadStream(snapshot.file), crlfDelay: Infinity })) {
+      for await (const line of completeLines(createReadStream(snapshot.file))) {
         hasher.update(`${line}\n`);
       }
       if (hasher.digest('hex') !== snapshot.digest) throw new Error('Historical source snapshot changed. The saved source position and reducer state cannot be reused.');
-      for await (const line of createInterface({ input: createReadStream(snapshot.file), crlfDelay: Infinity })) {
+      for await (const line of completeLines(createReadStream(snapshot.file))) {
         position++;
         if (position <= checkpoint.position) continue;
         const event = JSON.parse(line) as HistoricalEvent;
