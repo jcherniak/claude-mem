@@ -1,0 +1,88 @@
+name: claude-mem-sync
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-512m}
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cmem}
+      POSTGRES_DB: ${POSTGRES_DB:-cmem}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-64MB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-2MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-32MB}
+      - -c
+      - autovacuum_work_mem=${PG_AUTOVACUUM_WORK_MEM:-16MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-128MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-20}
+      - -c
+      - autovacuum_max_workers=${PG_AUTOVACUUM_MAX_WORKERS:-1}
+      - -c
+      - max_parallel_workers_per_gather=0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sync-api:
+    build:
+      context: .
+    restart: unless-stopped
+    mem_limit: ${SYNC_MEMORY_LIMIT:-256m}
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-cmem}@postgres:5432/${POSTGRES_DB:-cmem}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      SYNC_AUTH_MODE: ${SYNC_AUTH_MODE:-local}
+      SYNC_PROJECTION_MODE: ${SYNC_PROJECTION_MODE:-log}
+      SYNC_DB_POOL_SIZE: ${SYNC_DB_POOL_SIZE:-4}
+      SYNC_USER_ID: ${SYNC_USER_ID:-personal}
+      SYNC_PUBLIC_URL: ${SYNC_PUBLIC_URL:?Set SYNC_PUBLIC_URL in .env}
+      TOKEN_VERIFY_URL: ${TOKEN_VERIFY_URL:-https://cmem.ai/api/pro/sync/verify}
+      AUTH_CACHE_TTL_SECONDS: ${AUTH_CACHE_TTL_SECONDS:-900}
+      INTERNAL_PROJECTOR_URL: ${INTERNAL_PROJECTOR_URL:-}
+      CMEM_INTERNAL_PROJECTOR_SECRET: ${CMEM_INTERNAL_PROJECTOR_SECRET:-}
+    secrets:
+      - postgres_password
+    ports:
+      - "127.0.0.1:${SYNC_PORT:-8099}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/health', { signal: AbortSignal.timeout(2000) }); process.exit(response.ok ? 0 : 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+
+volumes:
+  postgres-data:
