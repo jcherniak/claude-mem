@@ -1088,6 +1088,23 @@ async function buildHooks() {
     const transcriptWatcherStats = fs.statSync(`${hooksDir}/${TRANSCRIPT_WATCHER.name}.cjs`);
     console.log(`✓ transcript-watcher built (${(transcriptWatcherStats.size / 1024).toFixed(2)} KB)`);
 
+    await build({
+      entryPoints: ['src/services/history-backfill/cli.ts'],
+      bundle: true,
+      platform: 'node',
+      target: 'node18',
+      format: 'cjs',
+      outfile: `${hooksDir}/history-backfill.cjs`,
+      minify: true,
+      ...SOURCEMAP_OPTS,
+      external: ['bun:sqlite'],
+      define: DIRNAME_DEFINE,
+      banner: { js: ['#!/usr/bin/env bun', ...DIRNAME_BANNER].join('\n') }
+    });
+    assertBundleIntegrity(`${hooksDir}/history-backfill.cjs`);
+    fs.chmodSync(`${hooksDir}/history-backfill.cjs`, 0o755);
+    console.log('✓ history-backfill built');
+
     // Advisory only — the watcher is meant to be a thin file-tail loop.
     const TRANSCRIPT_WATCHER_MAX_BYTES = 200 * 1024;
     if (transcriptWatcherStats.size > TRANSCRIPT_WATCHER_MAX_BYTES) {
