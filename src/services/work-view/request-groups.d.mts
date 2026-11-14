@@ -63,3 +63,4 @@ export interface GroupingInput {
   remaining: number;
 }
 export function validateGroupingAnswer<T>(answer: T, input: GroupingInput): T;
+export const PROGRESS_STATES: readonly string[];

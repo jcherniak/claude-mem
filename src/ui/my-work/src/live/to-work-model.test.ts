@@ -120,7 +120,7 @@ test('a closed request with a start and no completion does not count up as runni
   const complete = mapOne({ lifecycle: { explicit: true, complete: true, status: 'done' }, completedAtEpoch: null }).request
   assert.equal(complete.runningLive, undefined, 'a lifecycle that says complete has finished, even without a time')
   const open = mapOne({ completedAtEpoch: null }).request
-  assert.equal(open.runningLive, true, 'an open request with a start and no completion still counts up')
+  assert.equal(open.runningLive, undefined, 'an open but idle request shows its age, not active runtime')
 })
 
 const syntheticRequest = (): WorkViewHumanRequest => ({
@@ -231,7 +231,7 @@ test('a request shipped after a partial review is a shipped card at 100%, not a 
   }
 })
 
-test('a request with only asks maps cleanly: its asks show, no activity, and a fresh ask reads as working', () => {
+test('a request with only asks maps cleanly without claiming active agent work', () => {
   const now = Date.parse('2026-10-22T12:00:00Z')
   const asked = { ...syntheticRequest(), updatedAtEpoch: now - 60000, scopeUpdates: [{ text: 'Keep the existing design.', atEpoch: now - 60000 }] }
   const model = toWorkModel(snapshotWith([asked, { ...asked, id: 'old-ask', updatedAtEpoch: now - 3 * 86400000 }]), now)
@@ -241,9 +241,11 @@ test('a request with only asks maps cleanly: its asks show, no activity, and a f
   assert.deepEqual(fresh.granular, [])
   assert.deepEqual(fresh.workstreams, [])
   assert.equal(fresh.next.text, 'No agent work recorded yet')
-  assert.equal(fresh.state, 'working')
+  assert.equal(fresh.state, 'idle')
   assert.deepEqual(fresh.prompts.map((prompt) => prompt.quote), ['Build the release cards', 'Keep the existing design.'])
   assert.equal(old.state, 'idle')
+  assert.equal(fresh.runningLive, undefined, 'a recent ask is not proof of active agent work')
+  assert.equal(old.runningLive, undefined, 'an idle request must not show a running timer')
 })
 
 test('the build story recap is its first paragraph; no story hides it', () => {

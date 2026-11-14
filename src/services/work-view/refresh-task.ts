@@ -21,7 +21,7 @@ import { writeOwnerPromptsFile, type OwnerPromptsFile } from '../prompt-import/o
 import { resolvePythonCommand } from './python.js';
 import { SettingsDefaultsManager, type SettingsDefaults } from '../../shared/SettingsDefaultsManager.js';
 import { logger } from '../../utils/logger.js';
-import { FOCUS_BATCH, readGoals, readLedger, runCli, validateFocusAnswer, validateGroupingAnswer, type FocusInput, type LedgerDatabase, type RefreshNeeds } from './request-groups.mjs';
+import { FOCUS_BATCH, PROGRESS_STATES, readGoals, readLedger, runCli, validateFocusAnswer, validateGroupingAnswer, type FocusInput, type LedgerDatabase, type RefreshNeeds } from './request-groups.mjs';
 import { FOCUS_AUTO_PLACE_THRESHOLD, judgeFocusBatch, placesAlone, type FocusJudge, type FocusJudgement } from './focus-judge.mjs';
 import { isWithdrawnArea, ownerGoalsAreaRows, ownerGoalsSaveKey, PROPOSAL_KINDS, readFocusAreas, type FocusArea, type RouterFocusBody } from './my-focus.mjs';
 import { NAV_LABELS } from './nav-words.mjs';
@@ -156,6 +156,25 @@ export function readDecidedTextLanguage(ledgerDir: string): string | null {
 
 const strictObject = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
 const stringArray = { type: 'array', items: { type: 'string' } };
+const nullableDate = { type: ['string', 'null'] };
+
+export function reviewAnswerSchema(count: number): AnswerSchema {
+  return strictObject({ reviews: { type: 'array', minItems: count, maxItems: count, items: strictObject({
+    groupId: { type: 'string' }, state: { type: 'string', enum: PROGRESS_STATES }, percent: { type: 'integer' },
+    startedAt: nullableDate, shippedAt: nullableDate, lastActivityAt: nullableDate,
+    summary: { type: 'string' }, narrative: { type: 'string' }, evidence: stringArray,
+    reviewBasis: strictObject({ checkedThrough: { type: 'string' }, conversations: stringArray }),
+    milestones: { type: 'array', items: strictObject({ at: nullableDate, text: { type: 'string' }, evidence: stringArray }) },
+    preferences: { type: 'array', items: strictObject({ kind: { type: 'string' }, preference: { type: 'string' }, quote: { type: 'string' }, at: nullableDate }) },
+    outcome: { anyOf: [{ type: 'null' }, strictObject({
+      landed: strictObject({ text: { type: 'string' }, at: nullableDate, evidence: stringArray }),
+      usage: strictObject({ level: { type: 'string' }, text: { type: 'string' }, evidence: stringArray }),
+      value: strictObject({ level: { type: 'string' }, text: { type: 'string' }, evidence: stringArray }),
+      regressions: { type: 'array', items: strictObject({ text: { type: 'string' }, at: nullableDate, fixedBy: { type: ['string', 'null'] }, evidence: stringArray }) },
+      changes: { type: 'array', items: strictObject({ what: { type: 'string' }, why: { type: 'string' }, at: nullableDate, evidence: stringArray }) },
+    })] },
+  }) } });
+}
 /** The decisions `apply` takes, as Codex's structured-output schema (strict mode: every field required). */
 export const GROUPING_ANSWER_SCHEMA: AnswerSchema = strictObject({
   // The human language most of the batch's asks are written in (#5660): the run names it in every later question.
@@ -701,10 +720,10 @@ export function buildRefreshTask(options: RefreshTaskOptions): AgentTask & { ste
           const retryGroupIds = new Set(shows.map(show => show.groupId));
           const text = await ask([
             requestProgress, '---', readOnly,
-            `Do only section 2's review for the groups whose \`show\` output is in ${writeInput('show', shows)}: decide each one from the evidence as the reviewer task describes (amend the previous review for a group in "amend" mode). Reply with only {"reviews": [<one record-progress input per group, with reviewBasis copied verbatim from its show output>]}.`,
+            `Do only section 2's review for these groups. Their complete \`show\` output is in ${writeInput('show', shows)} and is also included inline below. Decide each one from this evidence as the reviewer task describes (amend the previous review for a group in "amend" mode). Reply with only {"reviews": [<one record-progress input per group, with reviewBasis copied verbatim from its show output>]}.\n\n\`\`\`json\n${JSON.stringify(shows, null, 2)}\n\`\`\``,
             rule,
             refusals.length ? `Your previous answer was refused for these groups:\n${refusals.join('\n')}\nFix them and answer again for those groups only. Here are the rejected reviews to correct, preserving their evidence and reviewBasis:\n${JSON.stringify(rejectedReviews)}` : '',
-          ].filter(Boolean).join('\n\n'), stepModels.review);
+          ].filter(Boolean).join('\n\n'), stepModels.review, reviewAnswerSchema(shows.length));
           let reviews: Array<{ groupId?: string }> = [];
           try { const answer = parseAgentJson(text); reviews = Array.isArray(answer.reviews) ? answer.reviews : []; }
           catch { /* Every group in this batch is refused below as "no review was given". */ }

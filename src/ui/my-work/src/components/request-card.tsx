@@ -227,9 +227,9 @@ export function RequestCard({ request, onOpen, onOpenFocus }: { request: Request
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <Req ids={['R5.3', 'R5.4', 'R5.5']}>
                 <dl className="flex flex-wrap items-center gap-x-2 gap-y-0.5 [&>div+div]:before:mr-1 [&>div+div]:before:content-['·']">
-                  <div className="flex gap-1"><dt className="sr-only">{t('Stage')}</dt><dd className="font-medium text-foreground/85" title={request.stageNote}>{t(request.stage)}</dd></div>
+                  <div className="flex gap-1"><dt className="sr-only">{t('Stage')}</dt><dd className="font-medium text-foreground/85" title={request.stageNote}>{request.granular.length || request.state === 'shipped' ? t(request.stage) : t('Stage not recorded')}</dd></div>
                   <div className="flex gap-1"><dt>{t('Started')}</dt><dd><time dateTime={request.startedAtIso}>{displayTime(request.startedAt)}</time></dd></div>
-                  <div className="flex gap-1"><dt>{request.state === 'shipped' ? t('Took') : t('Running')}</dt><dd className="tabular-nums"><RunningFor request={request} /></dd></div>
+                  <div className="flex gap-1"><dt>{request.state === 'shipped' ? t('Took') : request.runningLive ? t('Elapsed') : t('Age')}</dt><dd className="tabular-nums"><RunningFor request={request} /></dd></div>
                 </dl>
               </Req>
             </div>

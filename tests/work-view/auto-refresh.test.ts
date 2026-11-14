@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AutoRefreshWorker, refreshIntervalMs } from '../../src/services/work-view/auto-refresh-worker.mjs';
-import { buildRefreshTask, decidedTextLanguage, FOCUS_ANSWER_SCHEMA, GROUPING_ANSWER_SCHEMA, resolveRefreshAgents, resolveStepModels, reviewConcurrency, STEP_MODEL_SETTINGS, STEP_MODELS } from '../../src/services/work-view/refresh-task.js';
+import { buildRefreshTask, decidedTextLanguage, FOCUS_ANSWER_SCHEMA, GROUPING_ANSWER_SCHEMA, resolveRefreshAgents, resolveStepModels, reviewAnswerSchema, reviewConcurrency, STEP_MODEL_SETTINGS, STEP_MODELS } from '../../src/services/work-view/refresh-task.js';
 import { logger } from '../../src/utils/logger.js';
 import { readLedger, runCli } from '../../src/services/work-view/request-groups.mjs';
 import { scratchDir } from '../helpers/scratch-dir.js';
@@ -57,8 +57,18 @@ function deferred<T>() {
 
 function reviewAll(prompt: string) {
   const shows = JSON.parse(readFileSync(/is in (.+?\.json)/.exec(prompt)![1], 'utf8'));
+  expect(prompt).toContain(JSON.stringify(shows, null, 2));
   return JSON.stringify({ reviews: shows.map((show: any) => ({ groupId: show.groupId, state: 'in-progress', percent: 10, summary: 'Started.', reviewBasis: show.reviewBasis })) });
 }
+
+it('requires structured review output for every requested group', () => {
+  const schema = reviewAnswerSchema(3) as any;
+  expect(schema.properties.reviews.minItems).toBe(3);
+  expect(schema.properties.reviews.maxItems).toBe(3);
+  expect(schema.properties.reviews.items.additionalProperties).toBe(false);
+  expect(schema.properties.reviews.items.required).toContain('summary');
+  expect(schema.properties.reviews.items.required).toContain('reviewBasis');
+});
 
 function defaultAnswer(prompt: string) {
   if (prompt.includes('Do only section 1')) return JSON.stringify({ groups: [{ title: 'Release cards', conversations: [key('a')] }] });

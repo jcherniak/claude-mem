@@ -147,7 +147,7 @@ function toRequest(raw: WorkViewHumanRequest, agents: WorkViewAgent[], now: numb
   const status = normalizeRequestStatus({ items: statusItems, lifecycle: raw.lifecycle, checked: raw.review?.checked === true, progressState: reviewCounts ? review?.state : null, progressPercent: reviewCounts ? review?.percent : null }, now)
   const shippedAt = review?.state === 'shipped' && review.shippedAt ? Date.parse(review.shippedAt) : NaN
   const completedEpoch = raw.completedAtEpoch ?? (Number.isFinite(shippedAt) ? shippedAt : null)
-  const { state, stage, who } = presentStatus(status, now - updatedAt <= STALE_AFTER_MS)
+  const { state, stage, who } = presentStatus(status, (raw.activity.length > 0 || raw.items.length > 0) && now - updatedAt <= STALE_AFTER_MS)
   const recordedNext = (copyReady && cleanText(copy.next, 240))
     || cleanText(raw.items.find((item) => item.nextStep?.text)?.nextStep?.text, 140)
     || (raw.items.length || raw.activity.length || recordedReview ? NEXT_STEP_NOT_RECORDED : NO_WORK_YET)
@@ -189,9 +189,7 @@ function toRequest(raw: WorkViewHumanRequest, agents: WorkViewAgent[], now: numb
     startedAt: started ? formatDateTime(started) : 'Start not recorded',
     startedAtIso: started ? new Date(started).toISOString() : undefined,
     runningFor: started ? formatDuration((completedEpoch ?? now) - started) : 'Not recorded',
-    // Counts up only while the request is open: not closed, and not completed by a recorded time or a lifecycle that
-    // says complete (the projection's own rule, even when the lifecycle carries no time).
-    runningLive: started && completedEpoch === null && status !== 'closed' && raw.lifecycle?.complete !== true ? true : undefined,
+    runningLive: started && state === 'working' && raw.activity.length > 0 && completedEpoch === null && status !== 'closed' && raw.lifecycle?.complete !== true ? true : undefined,
     stage,
     state,
     closed: status === 'closed' || undefined,

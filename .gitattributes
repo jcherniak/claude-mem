@@ -2,6 +2,7 @@
 
 plugin/scripts/*.cjs eol=lf
 plugin/scripts/*.js  eol=lf
+plugin/scripts/worker-service.cjs whitespace=-blank-at-eol
 
 *.png  binary
 *.jpg  binary
