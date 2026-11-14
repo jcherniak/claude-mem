@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { deploymentMode, SYNC_AUTH_MODES, SYNC_PROJECTION_MODES, type SyncAuthMode, type SyncProjectionMode } from "./deployment-modes";
+
 export interface SyncApiEnv {
 	/** Empty in forward mode (no Postgres is opened). */
 	DATABASE_URL: string;
@@ -13,6 +16,11 @@ export interface SyncApiEnv {
 	FORWARD_ORIGIN: string | null;
 	PORT: number;
 	HOST: string;
+	SYNC_AUTH_MODE: SyncAuthMode;
+	SYNC_PROJECTION_MODE: SyncProjectionMode;
+	SYNC_DB_POOL_SIZE: number;
+	SYNC_USER_ID: string;
+	SYNC_PUBLIC_URL: string;
 }
 
 export const AUTH_CACHE_TTL_MIN_SECONDS = 60;
@@ -62,7 +70,7 @@ export function parseForwardOrigin(raw: string | undefined): string | null {
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): SyncApiEnv {
 	const forwardOrigin = parseForwardOrigin(source.FORWARD_ORIGIN);
-	const databaseUrl = (source.DATABASE_URL ?? "").trim();
+	let databaseUrl = (source.DATABASE_URL ?? "").trim();
 	if (!databaseUrl && forwardOrigin === null) {
 		throw new Error("DATABASE_URL is required (unless FORWARD_ORIGIN is set)");
 	}
@@ -70,6 +78,24 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): SyncApiEnv {
 	const port = Number(portRaw);
 	if (!/^\d+$/.test(portRaw) || port > 65535) {
 		throw new Error("PORT must be an integer 0–65535");
+	}
+	const authMode = deploymentMode(source.SYNC_AUTH_MODE, SYNC_AUTH_MODES, SYNC_AUTH_MODES[0], "SYNC_AUTH_MODE");
+	const projectionMode = deploymentMode(source.SYNC_PROJECTION_MODE, SYNC_PROJECTION_MODES, SYNC_PROJECTION_MODES[0], "SYNC_PROJECTION_MODE");
+	if (forwardOrigin !== null && (authMode !== SYNC_AUTH_MODES[0] || projectionMode !== SYNC_PROJECTION_MODES[0])) {
+		throw new Error("FORWARD_ORIGIN cannot be combined with local authentication or standalone projection");
+	}
+	const poolRaw = (source.SYNC_DB_POOL_SIZE ?? "10").trim();
+	const poolSize = Number(poolRaw);
+	if (!/^\d+$/.test(poolRaw) || poolSize < 1 || poolSize > 100) throw new Error("SYNC_DB_POOL_SIZE must be an integer 1–100");
+	const userId = (source.SYNC_USER_ID ?? "personal").trim();
+	if (!userId || userId.length > 128) throw new Error("SYNC_USER_ID must contain 1–128 characters");
+	if (forwardOrigin === null && source.DATABASE_PASSWORD_FILE) {
+		const parsed = new URL(databaseUrl);
+		if (parsed.password) throw new Error("Use DATABASE_PASSWORD_FILE or a password in DATABASE_URL, not both");
+		const password = readFileSync(source.DATABASE_PASSWORD_FILE, "utf8").trimEnd();
+		if (!password) throw new Error("DATABASE_PASSWORD_FILE must not be empty");
+		parsed.password = password;
+		databaseUrl = parsed.toString();
 	}
 	return {
 		DATABASE_URL: forwardOrigin === null ? databaseUrl : "",
@@ -80,5 +106,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): SyncApiEnv {
 		FORWARD_ORIGIN: forwardOrigin,
 		PORT: port,
 		HOST: (source.HOST ?? "0.0.0.0").trim() || "0.0.0.0",
+		SYNC_AUTH_MODE: authMode,
+		SYNC_PROJECTION_MODE: projectionMode,
+		SYNC_DB_POOL_SIZE: poolSize,
+		SYNC_USER_ID: userId,
+		SYNC_PUBLIC_URL: (source.SYNC_PUBLIC_URL ?? "").trim(),
 	};
 }

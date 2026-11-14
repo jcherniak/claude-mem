@@ -79,11 +79,22 @@ CREATE TABLE IF NOT EXISTS sync_repair_receipts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, repair_id)
 );
+
+CREATE TABLE IF NOT EXISTS sync_device_tokens (
+  user_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revoked_at TIMESTAMPTZ,
+  PRIMARY KEY (user_id, device_id)
+);
 `;
 
 export async function applyMigrations(sql: import("postgres").Sql): Promise<void> {
 	await sql`SET client_min_messages TO WARNING`;
 	await sql.unsafe(SCHEMA_SQL);
+	await sql`ALTER TABLE sync_users ADD COLUMN IF NOT EXISTS projection_mode TEXT NOT NULL DEFAULT 'external'`;
 	await sql`
 		INSERT INTO schema_migrations (id) VALUES ('001_init')
 		ON CONFLICT (id) DO NOTHING

@@ -23,7 +23,7 @@ export function errorResponse(status: number, error: string): Response {
 	return json(status, { error });
 }
 
-interface AuthOk {
+export interface AuthOk {
 	ok: true;
 	userId: string;
 	deviceId: string | null;
@@ -36,7 +36,7 @@ interface AuthOk {
 	authExpiresAtMs: number;
 }
 
-interface AuthFail {
+export interface AuthFail {
 	ok: false;
 	response: Response;
 }

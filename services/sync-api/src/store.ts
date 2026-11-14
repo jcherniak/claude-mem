@@ -206,6 +206,7 @@ interface InsertedOp {
 
 interface UserRow {
 	epoch: string;
+	projection_mode: import("./deployment-modes").SyncProjectionMode;
 	head_seq: string;
 	projected_seq: string;
 	projection_lease_token: string | null;
@@ -249,6 +250,7 @@ export class HubStore {
 		private readonly sql: postgres.Sql,
 		private readonly sockets: SocketRegistry,
 		private readonly userTurnMaxWaitMs = DEFAULT_USER_TURN_MAX_WAIT_MS,
+		private readonly projectionMode: import("./deployment-modes").SyncProjectionMode = "external",
 	) {}
 
 	/**
@@ -279,21 +281,22 @@ export class HubStore {
 	private async ensureUser(db: Db, userId: string): Promise<void> {
 		const epoch = newEpoch();
 		await db`
-			INSERT INTO sync_users (user_id, epoch, head_seq, projected_seq)
-			VALUES (${userId}, ${epoch}, '0', '0')
+			INSERT INTO sync_users (user_id, epoch, head_seq, projected_seq, projection_mode)
+			VALUES (${userId}, ${epoch}, '0', '0', ${this.projectionMode})
 			ON CONFLICT (user_id) DO NOTHING
 		`;
 	}
 
 	private async loadUser(tx: Tx, userId: string): Promise<UserRow> {
 		const rows = await tx<UserRow[]>`
-			SELECT epoch, head_seq, projected_seq, projection_lease_token, projection_lease_expires_at
+			SELECT epoch, head_seq, projected_seq, projection_lease_token, projection_lease_expires_at, projection_mode
 			FROM sync_users
 			WHERE user_id = ${userId}
 			FOR UPDATE
 		`;
 		const row = rows[0];
 		if (!row) throw new Error(`sync-hub invariant: missing user ${userId}`);
+		if (row.projection_mode !== this.projectionMode) throw new Error(`${PROJECTION_ERROR_PREFIX}projection_mode_mismatch`);
 		return row;
 	}
 
@@ -507,7 +510,9 @@ export class HubStore {
 					await this.upsertEntityHeads(tx, userId, [...finalHeads.values()]);
 					await tx`
 						UPDATE sync_users
-						SET head_seq = ${head}, updated_at = now()
+						SET head_seq = ${head},
+						    projected_seq = CASE WHEN ${this.projectionMode === "log"} THEN ${head} ELSE projected_seq END,
+						    updated_at = now()
 						WHERE user_id = ${userId}
 					`;
 				}

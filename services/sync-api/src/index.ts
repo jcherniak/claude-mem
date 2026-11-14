@@ -31,6 +31,8 @@ import {
 	type RepairRequest,
 } from "./store";
 import { CLIENT_CLOSED_REQUEST_ERROR, SYNC_HUB_BUSY_ERROR } from "./user-queue";
+import { DeviceTokens } from "./device-tokens";
+import { SYNC_AUTH_MODE_LABELS, SYNC_PROJECTION_MODE_LABELS } from "./deployment-modes";
 
 const MAX_OPS_PER_PUSH = 500;
 const MAX_PUSH_BODY_BYTES = 8_000_000;
@@ -428,7 +430,7 @@ export async function startSyncApi(
 		throw new Error("FORWARD_ORIGIN is set: start the forward proxy (startForwardProxy), not the hub");
 	}
 	const sql = postgres(env.DATABASE_URL, {
-		max: 10,
+		max: env.SYNC_DB_POOL_SIZE ?? 10,
 		idle_timeout: 20,
 		connect_timeout: 10,
 		// Neon's proxy silently drops these GUCs when they are sent as discrete
@@ -447,7 +449,8 @@ export async function startSyncApi(
 	});
 	await applyMigrations(sql);
 	const sockets = new SocketRegistry();
-	const store = new HubStore(sql, sockets, timeouts.userTurnMaxWaitMs);
+	const store = new HubStore(sql, sockets, timeouts.userTurnMaxWaitMs, env.SYNC_PROJECTION_MODE);
+	const deviceTokens = new DeviceTokens(sql);
 
 	const ctx = { env, store, sockets, sql };
 
@@ -469,6 +472,10 @@ export async function startSyncApi(
 			if (pathname === "/health") {
 				if (request.method !== "GET") return errorResponse(405, "use GET");
 				return json(200, { ok: true });
+			}
+			if ((env.SYNC_AUTH_MODE === "local" || env.SYNC_PROJECTION_MODE === "log")
+				&& (pathname.startsWith("/internal/") || pathname === "/v1/sync/ws")) {
+				return errorResponse(404, "not found");
 			}
 
 			if (pathname === "/internal/v1/projection/drain") {
@@ -499,7 +506,14 @@ export async function startSyncApi(
 				return errorResponse(404, "not found");
 			}
 
-			const auth = await authenticateRequest(request, env, authDependencies);
+			let auth;
+			try {
+				auth = env.SYNC_AUTH_MODE === "local"
+					? await deviceTokens.authenticate(request, env)
+					: await authenticateRequest(request, env, authDependencies);
+			} catch (error) {
+				return retryableStoreUnavailable("authentication", error);
+			}
 			if (!auth.ok) return auth.response;
 			if (pathname === "/v1/sync/repair/head" || pathname === "/v1/sync/repair") {
 				if (request.method !== "POST") return errorResponse(405, "use POST");
@@ -605,6 +619,10 @@ if (isMain) {
 		event: "ready",
 		url: app.url,
 		mode: env.FORWARD_ORIGIN !== null ? "forward" : "hub",
+		auth_mode: env.SYNC_AUTH_MODE,
+		projection_mode: env.SYNC_PROJECTION_MODE,
+		authentication: SYNC_AUTH_MODE_LABELS[env.SYNC_AUTH_MODE],
+		projection: SYNC_PROJECTION_MODE_LABELS[env.SYNC_PROJECTION_MODE],
 		...(env.FORWARD_ORIGIN !== null ? { forward_origin: env.FORWARD_ORIGIN } : {}),
 	}));
 	const shutdown = async (): Promise<void> => {
