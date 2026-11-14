@@ -19,6 +19,7 @@ import { paths } from './paths.js';
 import { clipUtf16, relayedBlock, relayedLine } from './relayed-text.js';
 import type { SettingsDefaults } from './SettingsDefaultsManager.js';
 import { logger } from '../utils/logger.js';
+import { hostedSyncToken, premiumFeaturesEnabled, premiumFetch } from './premium-features.js';
 
 /** The server caps the brief at this many characters; the client holds it to that many UTF-16 units, the unit the context budget counts. */
 export const TEAM_BRIEF_MAX_CHARS = 2_500;
@@ -42,7 +43,7 @@ export const TEAM_BRIEF_RESERVE_CHARS =
 
 export type TeamBrainSettings = Pick<
   SettingsDefaults,
-  'CLAUDE_MEM_TEAMBRAIN_URL' | 'CLAUDE_MEM_TEAMBRAIN_TEAM_ID' | 'CLAUDE_MEM_CLOUD_SYNC_TOKEN' | 'CLAUDE_MEM_CLOUD_SYNC_USER_ID'
+  'CLAUDE_MEM_TEAMBRAIN_URL' | 'CLAUDE_MEM_TEAMBRAIN_TEAM_ID' | 'CLAUDE_MEM_CLOUD_SYNC_TOKEN' | 'CLAUDE_MEM_CLOUD_SYNC_USER_ID' | 'CLAUDE_MEM_CLOUD_SYNC_HUB_URL'
 >;
 
 export interface TeamBrainConnection {
@@ -56,11 +57,13 @@ export interface TeamBrainConnection {
 
 /** TeamBrain is on exactly when CLAUDE_MEM_TEAMBRAIN_URL is set. Null means off. */
 export function teamBrainConnection(settings: Partial<TeamBrainSettings>): TeamBrainConnection | null {
+  const syncToken = hostedSyncToken(settings);
+  if (!syncToken) return null;
   const teambrainUrl = String(settings.CLAUDE_MEM_TEAMBRAIN_URL ?? '').trim().replace(/\/+$/, '');
   if (!teambrainUrl) return null;
   return {
     teambrainUrl,
-    syncToken: String(settings.CLAUDE_MEM_CLOUD_SYNC_TOKEN ?? '').trim(),
+    syncToken,
     syncUserId: String(settings.CLAUDE_MEM_CLOUD_SYNC_USER_ID ?? '').trim(),
     teamId: String(settings.CLAUDE_MEM_TEAMBRAIN_TEAM_ID ?? '').trim(),
   };
@@ -74,7 +77,7 @@ export function teamBrainConnection(settings: Partial<TeamBrainSettings>): TeamB
  * instructions take no room here: the MCP server sends them, not the hook.
  */
 export function teamBriefReserveChars(settings: Partial<TeamBrainSettings>): number {
-  return teamBrainConnection(settings) ? TEAM_BRIEF_RESERVE_CHARS : 0;
+  return premiumFeaturesEnabled() && settings.CLAUDE_MEM_TEAMBRAIN_URL?.trim() ? TEAM_BRIEF_RESERVE_CHARS : 0;
 }
 
 /** A URL, or null when the text is not one. Never throws. */
@@ -268,7 +271,7 @@ async function callTeamBrain(
   let ok: boolean;
   let raw: string;
   try {
-    const response = await fetch(url, init);
+    const response = await premiumFetch(url, init);
     ({ status, ok } = response);
     raw = await response.text();
   } catch (error: unknown) {

@@ -49,6 +49,19 @@ afterEach(async () => {
 });
 
 describe('focus share routes', () => {
+  it('refuses hosted features when premium is disabled, even with an injected client', async () => {
+    const previous = process.env.CLAUDE_MEM_PREMIUM_ENABLED;
+    delete process.env.CLAUDE_MEM_PREMIUM_ENABLED;
+    try {
+      for (const path of ['/api/work-view/focus/shares', '/api/setup/state', '/api/setup/scan']) {
+        expect((await fetch(`${origin}${path}`)).status).toBe(403);
+      }
+      expect((await fetch(`${origin}/api/work-view/diagnostics`)).status).toBe(200);
+    } finally {
+      if (previous === undefined) delete process.env.CLAUDE_MEM_PREMIUM_ENABLED;
+      else process.env.CLAUDE_MEM_PREMIUM_ENABLED = previous;
+    }
+  });
   for (const path of ['/api/work-view/focus/shares', '/api/work-view/focus/share/comments?focusAreaId=area-1']) {
     it(`refuses another local page reading ${path.split('?')[0]}`, async () => {
       for (const headers of [{ Origin: 'http://localhost:1' }, { Origin: 'http://127.0.0.1:3' }, { 'Sec-Fetch-Site': 'cross-site' }]) {

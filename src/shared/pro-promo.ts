@@ -13,6 +13,8 @@
  * Change both together.
  */
 
+import { premiumFeaturesEnabled } from './premium-features.js';
+
 /** Landing page for the trial (cmem-pro `src/app/(landing)/pro/page.tsx`). */
 export const PRO_TRIAL_URL = 'https://cmem.ai/pro';
 
@@ -63,6 +65,7 @@ export const PRO_TRIAL_PITCH = `${PRO_TRIAL_LABEL} — memory runs off-plan. Get
  * (empty or `none`), as decided on #5540.
  */
 export function proTrialLine(source: ProPromoSource, plan = ''): string {
+  if (!premiumFeaturesEnabled()) return '';
   const trimmedPlan = plan.trim();
   if (trimmedPlan === 'trial' || trimmedPlan === 'pro' || trimmedPlan === 'teambrain_seat') return '';
   return `${String.fromCodePoint(0x2728)} ${PRO_TRIAL_PITCH} ${proTrialUrl(source)}`;

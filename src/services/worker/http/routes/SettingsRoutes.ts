@@ -11,6 +11,7 @@ import { ModeManager } from '../../../domain/ModeManager.js';
 import { BaseRouteHandler } from '../BaseRouteHandler.js';
 import { validateBody } from '../middleware/validateBody.js';
 import { SettingsDefaultsManager } from '../../../../shared/SettingsDefaultsManager.js';
+import { premiumFeaturesEnabled } from '../../../../shared/premium-features.js';
 import { clearPortCache } from '../../../../shared/worker-utils.js';
 import { snapshotDependencyHealth } from '../../../../shared/dependency-health.js';
 import { ensureSettingsDocument, updateSettingsDocument } from '../../../../shared/settings-document.js';
@@ -254,7 +255,7 @@ export class SettingsRoutes extends BaseRouteHandler {
     const settingsPath = paths.settings();
     ensureSettingsDocument(settingsPath, SettingsDefaultsManager.getAllDefaults());
     const settings = SettingsDefaultsManager.loadFromFile(settingsPath);
-    res.json(redactSecretSettings(settings));
+    res.json({ ...redactSecretSettings(settings), CLAUDE_MEM_PREMIUM_ENABLED: premiumFeaturesEnabled() ? 'true' : 'false' });
   });
 
   private handleGetDependencyHealth = this.wrapHandler((_req: Request, res: Response): void => {

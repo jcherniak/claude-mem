@@ -427,7 +427,7 @@ export function ContextSettingsModal({
                 <ToggleSwitch
                   id="media-capture-enabled"
                   label="Keep images"
-                  description="Keep the screenshots and images your agent reads or makes, so they show on your requests in My Work. Images stay on this computer until their event is deleted. With Cloud Sync on, they are also uploaded privately to your cmem.ai account. This switch never sends images to an AI model. Turning it off stops keeping new images; images already kept stay."
+                  description="Keep screenshots and images for My Work on this computer until their event is deleted. Uploads to cmem.ai also require hosted premium features and CMEM credentials. Self-hosted sync does not upload these images to cmem.ai. This switch never sends images to an AI model. Turning it off stops new image capture; retained images stay."
                   checked={formState.CLAUDE_MEM_MEDIA_CAPTURE_ENABLED === 'true'}
                   onChange={(checked) => updateSetting('CLAUDE_MEM_MEDIA_CAPTURE_ENABLED', checked ? 'true' : 'false')}
                 />

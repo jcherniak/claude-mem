@@ -34,6 +34,7 @@ import { HostedIntent } from '../../../work-view/hosted-intent.js';
 import { FocusShareError, FocusShares } from '../../../work-view/focus-share.js';
 import { FocusSharePublisher } from '../../../work-view/focus-share-publisher.js';
 import { cmemProOrigin } from '../../../../shared/cmem-gateway.js';
+import { hostedSyncToken, premiumFeaturesEnabled } from '../../../../shared/premium-features.js';
 import { isOpenRouterApiUrl } from '../../../../shared/openrouter-base-url.js';
 import { FOCUS_CHANGED_MESSAGE, focusChangeVersion } from '../../../../shared/focus-change-version.js';
 import { runAgentTask } from '../../../agent-runner/run.js';
@@ -597,12 +598,12 @@ export class WorkViewRoutes extends BaseRouteHandler {
     this.settingsPath = options.settingsPath ?? USER_SETTINGS_PATH;
     this.historyImport = options.historyImport ?? null;
     this.hostedIntent = options.hostedIntent === undefined
-      ? (this.setupScan && ledgerDir && this.appendWorkStateEntry ? new HostedIntent({
+      ? (premiumFeaturesEnabled() && this.setupScan && ledgerDir && this.appendWorkStateEntry ? new HostedIntent({
         origin: () => cmemProOrigin(),
         intentConfigPath: join(dirname(this.settingsPath), 'intent-install.json'),
         credentials: () => {
           const settings = SettingsDefaultsManager.loadFromFile(this.settingsPath, true, { readOnly: true });
-          return { token: settings.CLAUDE_MEM_CLOUD_SYNC_TOKEN?.trim() ?? '', userId: settings.CLAUDE_MEM_CLOUD_SYNC_USER_ID?.trim() ?? '' };
+          return { token: hostedSyncToken(settings) ?? '', userId: settings.CLAUDE_MEM_CLOUD_SYNC_USER_ID?.trim() ?? '' };
         },
         ledgerDir,
         openDatabase: () => new Database(this.databasePath, { readonly: true, create: false }),
@@ -612,14 +613,14 @@ export class WorkViewRoutes extends BaseRouteHandler {
       }) : null)
       : options.hostedIntent;
     this.focusShares = options.focusShares === undefined
-      ? new FocusShares({
+      ? (premiumFeaturesEnabled() ? new FocusShares({
         origin: () => cmemProOrigin(),
         registryPath: join(dirname(this.settingsPath), 'focus-shares.json'),
         credentials: () => {
           const settings = SettingsDefaultsManager.loadFromFile(this.settingsPath, true, { readOnly: true });
-          return { token: settings.CLAUDE_MEM_CLOUD_SYNC_TOKEN?.trim() ?? '', userId: settings.CLAUDE_MEM_CLOUD_SYNC_USER_ID?.trim() ?? '' };
+          return { token: hostedSyncToken(settings) ?? '', userId: settings.CLAUDE_MEM_CLOUD_SYNC_USER_ID?.trim() ?? '' };
         },
-      })
+      }) : null)
       : options.focusShares;
     // Shared pages keep updating with My Work closed (R17.3): the worker publishes them on its own timer.
     this.focusSharePublisher = this.focusShares
@@ -724,6 +725,13 @@ export class WorkViewRoutes extends BaseRouteHandler {
   }
 
   setupRoutes(app: express.Application): void {
+    app.use(['/api/work-view/focus/share', '/api/work-view/focus/shares', '/api/setup'], (req, res, next) => {
+      if (!premiumFeaturesEnabled()) {
+        res.status(403).json({ error: 'Hosted premium features are disabled.' });
+        return;
+      }
+      next();
+    });
     const setupTelemetry = this.setupTelemetry ?? createSetupTelemetry(this.setupStatePath);
     this.setupTelemetry = setupTelemetry;
     app.get('/api/setup/telemetry', workViewLoopbackOnly, requireWorkViewReadOrigin, this.wrapHandler((_req, res) => {
@@ -1040,6 +1048,7 @@ export class WorkViewRoutes extends BaseRouteHandler {
   /** The choice can change until the installer acts on it; after that the installer holds the result. */
   private saveSetupChoice = (req: Request, res: Response): void => {
     const { branch, memoryBilling } = req.body as z.infer<typeof setupChoiceBody>;
+    if (branch === 'go' && !premiumFeaturesEnabled()) { res.status(403).json({ error: 'Hosted premium features are disabled.' }); return; }
     const state = readSetupState(this.setupStatePath);
     if (state.status === 'complete') { res.status(409).json({ error: 'Setup is already complete.', state: this.setupStateView(state) }); return; }
     if (state.install && state.install.status !== 'ready') { res.status(409).json({ error: 'Finish installing your agents before choosing memory storage.' }); return; }

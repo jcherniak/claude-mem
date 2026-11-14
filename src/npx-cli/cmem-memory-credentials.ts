@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import net from 'node:net';
 import type { SettingsDefaults } from '../shared/SettingsDefaultsManager.js';
 import { isCmemGatewayUrl } from '../shared/cmem-gateway.js';
+import { isLocalSyncToken } from '../shared/premium-features.js';
 import { CMEM_PRO_BASE_URL, CMEM_PRO_MODEL } from './cmem-pro-costs.js';
 
 export const HOST_OBSERVER_DEFAULT_PORT = '37777';
@@ -321,15 +322,18 @@ export function buildAnthropicMaxLocalSettings(
 ): Record<string, string> {
   const activeBaseUrl = nonEmptyString(settings.CLAUDE_MEM_OPENROUTER_BASE_URL);
   const activeProviderIsCmem = Boolean(activeBaseUrl && isCmemGatewayUrl(activeBaseUrl));
+  const localSync = isLocalSyncToken(nonEmptyString(settings.CLAUDE_MEM_CLOUD_SYNC_TOKEN));
 
   return {
     CLAUDE_MEM_PROVIDER: 'claude',
     CLAUDE_MEM_CLAUDE_AUTH_METHOD: 'subscription',
-    CLAUDE_MEM_CLOUD_SYNC_TOKEN: '',
-    CLAUDE_MEM_CLOUD_SYNC_USER_ID: '',
-    CLAUDE_MEM_CLOUD_SYNC_HUB_URL: '',
-    CLAUDE_MEM_CLOUD_SYNC_DEVICE_ID: '',
-    CLAUDE_MEM_CLOUD_SYNC_DEVICE_NAME: '',
+    ...(localSync ? {} : {
+      CLAUDE_MEM_CLOUD_SYNC_TOKEN: '',
+      CLAUDE_MEM_CLOUD_SYNC_USER_ID: '',
+      CLAUDE_MEM_CLOUD_SYNC_HUB_URL: '',
+      CLAUDE_MEM_CLOUD_SYNC_DEVICE_ID: '',
+      CLAUDE_MEM_CLOUD_SYNC_DEVICE_NAME: '',
+    }),
     CLAUDE_MEM_PRO_MEMORY_KEY: '',
     CLAUDE_MEM_PRO_MEMORY_BASE_URL: '',
     CLAUDE_MEM_PRO_MEMORY_MODEL: '',

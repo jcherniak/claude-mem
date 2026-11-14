@@ -25,6 +25,7 @@ import { needsYou, OTHER_FOCUS_AREA_ID } from '@/data'
 import { ACTIVE_SOURCE, useStore, useWorkModel, useWorkspace, type FocusSelection, type NavPage } from '@/store'
 import { shownFocusAreaId } from '@/store/slices/view-slice'
 import { useFocusSharesLoader } from '@/live/focus-shares'
+import { PremiumFeaturesProvider, usePremiumFeatures } from '@/lib/premium-features'
 import { isServedFromCloud } from '@/live/served-from'
 import { MediaSourceContext } from '@/components/observation-media/ObsMedia'
 import { SAMPLE_MEDIA_SOURCE } from '@/components/observation-media/sample-media'
@@ -57,7 +58,8 @@ function NavTile({ icon: Icon, active }: { icon: typeof InboxIcon; active: boole
 
 /** Bottom of the rail, cloud viewer only (R18.1). Same row markup as the pages above it; local My Work has no cmem.ai account to manage. */
 function AccountAndBillingLink() {
-  if (!isServedFromCloud(window.location.hostname)) return null
+  const premiumEnabled = usePremiumFeatures()
+  if (!premiumEnabled || !isServedFromCloud(window.location.hostname)) return null
   return (
     <Req ids={['R18.1']}>
       <a href={ACCOUNT_AND_BILLING_URL} title="Account & billing" className="relative flex h-10 w-full items-center gap-2.5 rounded-[10px] px-1.5 text-left text-[0.9rem] text-foreground/85 transition-colors hover:bg-card/70">
@@ -81,6 +83,8 @@ function HeaderBody({ visible, children }: { visible?: boolean; children: ReactN
 /** TeamBrain is a switch on the same GUI; turning it on is where the team plan is bought (§9). */
 function TeamSwitch({ team, onChange }: { team: boolean; onChange: (team: boolean) => void }) {
   const { t } = useI18n()
+  const premiumEnabled = usePremiumFeatures()
+  if (!premiumEnabled) return null
   return (
     <Req ids={['R9.1', 'R9.4']}>
       <HoverCard openDelay={100}>
@@ -142,6 +146,11 @@ function RequestDetailLoading({ title, onClose }: { title: string; onClose: () =
 }
 
 export default function App() {
+  return <PremiumFeaturesProvider><WorkspaceApp /></PremiumFeaturesProvider>
+}
+
+function WorkspaceApp() {
+  const premiumEnabled = usePremiumFeatures()
   // An agent may leave setup for the person's first visit. Only a persisted
   // install handoff opens it automatically; old installations and cloud readers keep My Work.
   const page = useStore((state) => state.view.page)
@@ -150,15 +159,15 @@ export default function App() {
   // identity re-posted an open whenever that function was replaced.
   useEffect(() => { useStore.getState().reportOpen() }, [])
   useEffect(() => {
-    if (page === 'setup' || isServedFromCloud(window.location.hostname)
+    if (!premiumEnabled || page === 'setup' || isServedFromCloud(window.location.hostname)
       || new URLSearchParams(window.location.search).get('source') === 'sample') return
     let active = true
     void import('@/setup/setup-data').then(module => module.setupPending()).then(pending => {
       if (active && pending && useStore.getState().view.page === 'app') useStore.getState().startSetup()
     }).catch(() => { /* No confirmed handoff: keep the existing workspace usable. */ })
     return () => { active = false }
-  }, [page])
-  if (page !== 'setup') return <WorkApp />
+  }, [page, premiumEnabled])
+  if (!premiumEnabled || page !== 'setup') return <WorkApp />
   return <MotionConfig reducedMotion="user"><Suspense fallback={null}><SetupPage onComplete={finishSetup} /></Suspense></MotionConfig>
 }
 
@@ -188,10 +197,11 @@ function WorkApp() {
 }
 
 function LoadedApp() {
+  const premiumEnabled = usePremiumFeatures()
   const { t } = useI18n()
   const { sourceKind, requests, focusAreas } = useWorkModel()
   // Which areas are shared, for their Shared mark. The worker keeps the pages current (R17.3).
-  useFocusSharesLoader(sourceKind === 'local')
+  useFocusSharesLoader(premiumEnabled && sourceKind === 'local')
   const sample = sourceKind === 'sample'
   const view = useStore((state) => state.view.section)
   const focusChoice = useStore((state) => state.view.focusChoice)
@@ -221,7 +231,7 @@ function LoadedApp() {
               {/* Wireframe controls: not part of the product. */}
               <StickyBanner hideOnScroll className="min-h-0 flex-wrap justify-start gap-x-3 gap-y-1 border-b border-border/70 bg-card/85 px-4 py-1.5 pr-12 text-xs whitespace-nowrap backdrop-blur-md md:px-6 md:pr-10">
                 {sample && <Badge variant="outline" className="font-normal">{t('Wireframe · sample data')}</Badge>}
-                {sample && <Req ids={['R13.1']}>
+                {premiumEnabled && sample && <Req ids={['R13.1']}>
                   <ToggleGroup type="single" size="sm" variant="outline" spacing={1} className="flex-nowrap" value={workspace.mode} onValueChange={(mode) => mode && setWorkspace({ mode: mode as 'home' | 'web', connected: mode === 'web' || workspace.connected })}>
                     <ToggleGroupItem value="home" className="h-7 text-xs">{t('At home')}<span className="hidden md:inline">{t('· localhost:37777')}</span></ToggleGroupItem>
                     <ToggleGroupItem value="web" className="h-7 text-xs">{t('On the go')}<span className="hidden md:inline">{t('· cmem.ai')}</span></ToggleGroupItem>

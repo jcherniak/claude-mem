@@ -34,6 +34,24 @@ describe('SettingsRoutes settings document writes', () => {
     return { server, url: `http://127.0.0.1:${address.port}/api/settings` };
   }
 
+  it('reports the environment-only premium flag and ignores a stored opt-in', async () => {
+    const previous = process.env.CLAUDE_MEM_PREMIUM_ENABLED;
+    delete process.env.CLAUDE_MEM_PREMIUM_ENABLED;
+    writeFileSync(settingsPath, JSON.stringify({ CLAUDE_MEM_PREMIUM_ENABLED: 'true' }));
+    const { server, url } = await startServer();
+    try {
+      expect((await (await fetch(url)).json()).CLAUDE_MEM_PREMIUM_ENABLED).toBe('false');
+      await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ CLAUDE_MEM_PREMIUM_ENABLED: 'true' }) });
+      expect((await (await fetch(url)).json()).CLAUDE_MEM_PREMIUM_ENABLED).toBe('false');
+      process.env.CLAUDE_MEM_PREMIUM_ENABLED = 'true';
+      expect((await (await fetch(url)).json()).CLAUDE_MEM_PREMIUM_ENABLED).toBe('true');
+    } finally {
+      if (previous === undefined) delete process.env.CLAUDE_MEM_PREMIUM_ENABLED;
+      else process.env.CLAUDE_MEM_PREMIUM_ENABLED = previous;
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  });
+
   it('returns 400 when the request has no body', async () => {
     const { server, url } = await startServer();
     try {

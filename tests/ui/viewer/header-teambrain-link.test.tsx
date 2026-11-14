@@ -17,10 +17,19 @@ describe('viewer header TeamBrain link', () => {
         onThemeChange={() => {}}
         onContextPreviewToggle={() => {}}
         showTeamBrainLink={true}
+        premiumEnabled={true}
       />,
     );
     expect(html).toContain('class="teambrain-cta"');
     expect(html).toContain(`href="${TEAMBRAIN_START_URL}"`);
     expect(html).toContain('>TeamBrain</a>');
+  });
+  it('hides hosted links by default', () => {
+    const html = renderToStaticMarkup(<Header projects={[]} currentFilter="" onFilterChange={() => {}}
+      isProcessing={false} queueDepth={0} themePreference="system" onThemeChange={() => {}}
+      onContextPreviewToggle={() => {}} showTeamBrainLink={true} />);
+    expect(html).not.toContain('teambrain-cta');
+    expect(html).not.toContain('pro-trial-cta');
+    expect(html).not.toContain('cmem.ai');
   });
 });

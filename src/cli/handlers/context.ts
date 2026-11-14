@@ -18,6 +18,7 @@ import {
 import { getProjectContext } from '../../utils/project-name.js';
 import { HOOK_EXIT_CODES, HOOK_TIMEOUTS } from '../../shared/hook-constants.js';
 import { logger } from '../../utils/logger.js';
+import { premiumFeaturesEnabled } from '../../shared/premium-features.js';
 import { loadFromFileOnce } from '../../shared/hook-settings.js';
 import { shouldTrackProject } from '../../shared/should-track-project.js';
 import { isProjectExcluded } from '../../utils/project-filter.js';
@@ -593,7 +594,7 @@ export const contextHandler: EventHandler = {
     const daysLeft = !fallbackActive && settings.CLAUDE_MEM_PRO_PLAN === 'trial'
       ? trialDaysRemaining(settings.CLAUDE_MEM_PRO_TRIAL_ENDS_AT)
       : null;
-    const trialDaysLine = daysLeft !== null && daysLeft >= 0
+    const trialDaysLine = premiumFeaturesEnabled() && daysLeft !== null && daysLeft >= 0
       ? `claude-mem free trial: ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
       : null;
 
@@ -603,7 +604,7 @@ export const contextHandler: EventHandler = {
     const showsBanner = showTerminalOutput && Boolean(displayContent);
     // TeamBrain discovery: one line on the banner the user already reads, once
     // per claude-mem version, and never once this install is in a team.
-    const teamBrainDiscoveryLine = showsBanner && !teamBrain && !hasShownTeamBrainDiscoveryNotice()
+    const teamBrainDiscoveryLine = premiumFeaturesEnabled() && showsBanner && !teamBrain && !hasShownTeamBrainDiscoveryNotice()
       ? TEAMBRAIN_DISCOVERY_LINE
       : null;
     if (teamBrainDiscoveryLine) markTeamBrainDiscoveryNoticeShown();

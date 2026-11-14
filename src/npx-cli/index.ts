@@ -11,6 +11,7 @@ import { readPluginVersion } from './utils/paths.js';
 import type { InstallOptions } from './commands/install.js';
 import { resolveInstallerProviderChoice } from './installer-provider-choice.js';
 import { SETUP_MODES, type SetupMode } from '../shared/setup-install.js';
+import { premiumFeaturesEnabled } from '../shared/premium-features.js';
 
 const args = process.argv.slice(2);
 const firstArg = args[0]?.toLowerCase() ?? '';
@@ -32,12 +33,12 @@ ${styleText('bold', 'claude-mem')} v${version} — your coding agent remembers b
 ${styleText('bold', 'Install Commands')} (no Bun required):
   ${styleText('cyan', 'npx claude-mem')}                     Interactive install
   ${styleText('cyan', 'npx claude-mem install')}              Interactive install (also puts the claude-mem hook launcher on PATH)
-  Installing for a user who is available? Run npx claude-mem install --setup browser and keep it running.
+${premiumFeaturesEnabled() ? `  Installing for a user who is available? Run npx claude-mem install --setup browser and keep it running.
   User unavailable? Use --setup defer to leave their choices for the first visit to the web GUI.
-  ${styleText('cyan', 'npx claude-mem install --setup browser|defer')}   Open web setup now, or save it for later (works from agent shells)
+  ${styleText('cyan', 'npx claude-mem install --setup browser|defer')}   Open web setup now, or save it for later (works from agent shells)` : ''}
   ${styleText('cyan', 'npx claude-mem install --ide <id>')}   Install for specific IDE
   ${styleText('cyan', 'npx claude-mem install --ide dsh --dsh-profile <name>')}   Install DeepSeek Harness (default profile: web)
-  ${styleText('cyan', 'npx claude-mem install --provider claude|codex|gemini|openrouter|host')}   Set LLM provider explicitly. Without install flags, agent shells save setup for the web GUI. codex, gemini and openrouter need a cmem.ai sign-in in a browser; claude and host need no claude-mem account
+  ${styleText('cyan', 'npx claude-mem install --provider claude|codex|gemini|openrouter|host')}   Use your own model provider. No claude-mem account is required when premium features are disabled.
   ${styleText('cyan', 'npx claude-mem install --model <id>')}   Set Claude or Codex model (when provider=claude|codex)
   ${styleText('cyan', 'npx claude-mem install --no-auto-start')}   Skip worker auto-start at the end
   ${styleText('cyan', 'npx claude-mem install --disable-auto-memory')}   Explicitly disable Claude Code native auto-memory
@@ -79,10 +80,10 @@ ${styleText('bold', 'Runtime Commands')} (requires Bun, delegates to installed p
   ${styleText('cyan', 'npx claude-mem t3code status|uninstall [--settings <path>]')}   Inspect or disable T3 Code provider plugins
   ${styleText('cyan', 'npx claude-mem pi install|status|uninstall')}   Manage the native Pi extension
 
-${styleText('bold', 'TeamBrain')} (one shared brain for your team; your own memory stays private):
+${premiumFeaturesEnabled() ? `${styleText('bold', 'TeamBrain')} (one shared brain for your team; your own memory stays private):
   ${styleText('cyan', 'npx claude-mem teambrain start')}                Create a team on cmem.ai
   ${styleText('cyan', 'npx claude-mem teambrain join <invite-link>')}   Join a team, then choose which projects to share
-  ${styleText('cyan', 'npx claude-mem teambrain status|share|leave')}   Check your teams, change what you share, or leave
+  ${styleText('cyan', 'npx claude-mem teambrain status|share|leave')}   Check your teams, change what you share, or leave` : ''}
 
 ${styleText('bold', 'Claude Code Hooks')}:
   Each hook runs ${styleText('cyan', 'claude-mem hook claude-code <event>')} directly, with no shell.

@@ -63,6 +63,7 @@ describe('teamBrainConnection', () => {
     expect(teamBrainConnection({
       CLAUDE_MEM_TEAMBRAIN_URL: 'https://cmem.ai/',
       CLAUDE_MEM_TEAMBRAIN_TEAM_ID: ' team_1 ',
+      CLAUDE_MEM_CLOUD_SYNC_HUB_URL: 'https://sync.cmem.ai',
       CLAUDE_MEM_CLOUD_SYNC_TOKEN: 'token',
       CLAUDE_MEM_CLOUD_SYNC_USER_ID: 'user',
     })).toEqual({ teambrainUrl: 'https://cmem.ai', syncToken: 'token', syncUserId: 'user', teamId: 'team_1' });

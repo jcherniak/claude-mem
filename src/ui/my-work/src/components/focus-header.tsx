@@ -22,6 +22,7 @@ import { formatPromptDay, formatPromptTime, promptDayKey, shipDayKey } from '@/l
 import { navWordIn } from '../../../../services/work-view/nav-words.mjs'
 import { AreaEditDialog, type AreaEdit, type FocusChanges } from './focus-changes'
 import { SharedMark, ShareFocusDialog } from './share-focus'
+import { usePremiumFeatures } from '@/lib/premium-features'
 import { canShareArea } from '@/live/to-shared-focus'
 
 const requestTitle = (request: Request, t?: (s: string) => string) => request.title ?? (t ? t('New request, title being written') : 'New request, title being written')
@@ -165,6 +166,7 @@ function NotStartedAsks({ asks }: { asks: FocusAsk[] }) {
 
 /** Rename, Edit goal, Merge into…, Move up / down (the owner's order), Done or back in focus, and Share…. */
 function AreaMenu({ area, changes, onEdit, onShare }: { area: FocusArea; changes: FocusChanges; onEdit: (edit: AreaEdit) => void; onShare: () => void }) {
+  const premiumEnabled = usePremiumFeatures()
   const { t } = useI18n()
   const { focusAreas } = useWorkModel()
   // The owner's order covers kept areas only (the worker refuses anything else), all of them at once, as the rail shows them.
@@ -189,7 +191,7 @@ function AreaMenu({ area, changes, onEdit, onShare }: { area: FocusArea; changes
         {area.status === 'done'
           ? <DropdownMenuItem onSelect={() => changes.apply({ action: 'keep', focusAreaId: area.id })}><CheckIcon />{t('Back in focus')}</DropdownMenuItem>
           : <DropdownMenuItem onSelect={() => changes.apply({ action: 'done', focusAreaId: area.id })}><CheckIcon />{t('Done')}</DropdownMenuItem>}
-        {canShareArea(area) && <>
+        {premiumEnabled && canShareArea(area) && <>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onShare}><Link2Icon />{t('Share…')}</DropdownMenuItem>
         </>}
@@ -213,6 +215,7 @@ function AreaName({ name }: { name: string }) {
 
 /** One focus area, on top of its requests. `requests` are all of them, closed ones too, as the combined progress counts them. */
 export function FocusHeader({ area, requests, changes }: { area: FocusArea; requests: Request[]; changes: FocusChanges }) {
+  const premiumEnabled = usePremiumFeatures()
   const { t } = useI18n()
   const [edit, setEdit] = useState<AreaEdit | null>(null)
   const [sharing, setSharing] = useState(false)
@@ -232,7 +235,7 @@ export function FocusHeader({ area, requests, changes }: { area: FocusArea; requ
               <h2 className="text-lg leading-snug font-semibold tracking-tight"><AreaName name={area.name} /></h2>
               {area.status === 'suggested' && <Badge variant="outline" className="font-normal">{t('Suggested')}</Badge>}
               {area.status === 'done' && <Badge variant="outline" className="border-shipped-border font-normal text-shipped-foreground">{t('Done')}</Badge>}
-              <SharedMark focusAreaId={area.id} onOpen={() => setSharing(true)} />
+              {premiumEnabled && <SharedMark focusAreaId={area.id} onOpen={() => setSharing(true)} />}
             </div>
             {area.goal ? <p className="text-[0.95rem] leading-snug">{area.goal}</p> : <p className="text-sm text-muted-foreground italic">{t('Write one sentence saying what this area is for (Edit goal).')}</p>}
             {/* The area's own evidence sits with its goal, so it can't be read as belonging to the asks below. */}
@@ -261,7 +264,7 @@ export function FocusHeader({ area, requests, changes }: { area: FocusArea; requ
           </Req>
         )}
         <AreaEditDialog edit={edit} changes={changes} onClose={() => setEdit(null)} />
-        {canShareArea(area) && <ShareFocusDialog area={area} open={sharing} onOpenChange={setSharing} />}
+        {premiumEnabled && canShareArea(area) && <ShareFocusDialog area={area} open={sharing} onOpenChange={setSharing} />}
       </HeaderFrame>
     </Req>
   )

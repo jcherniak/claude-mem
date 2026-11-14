@@ -12,6 +12,7 @@ import {
 import { logger } from '../../utils/logger.js';
 import type { MediaStore, VariantMetadata } from './store.js';
 import { isCloudSyncConfigured } from '../sync/CloudSync.js';
+import { hostedSyncToken, premiumFetch } from '../../shared/premium-features.js';
 
 /**
  * Owner cloud media plane client and the local upload/deletion/replica jobs
@@ -52,7 +53,7 @@ export interface MediaCloudSettings {
 
 /** Uploads run only with capture on AND cloud sync configured (CloudSync's exact predicate). */
 export function mediaCloudUploadsEnabled(settings: MediaCloudSettings): boolean {
-  return settings.CLAUDE_MEM_MEDIA_CAPTURE_ENABLED === 'true' && isCloudSyncConfigured(settings);
+  return settings.CLAUDE_MEM_MEDIA_CAPTURE_ENABLED === 'true' && isCloudSyncConfigured(settings) && hostedSyncToken(settings) !== null;
 }
 
 /** Replica reads and queued deletions need only the cloud sync credentials. */
@@ -179,11 +180,11 @@ export class MediaCloudClient {
 
   private async request(path: string, init: RequestInit): Promise<Response | null> {
     try {
-      return await this.fetchImpl(`${this.baseUrl}/api/observation-media${path}`, {
+      return await premiumFetch(`${this.baseUrl}/api/observation-media${path}`, {
         ...init,
         headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${this.token}` },
         signal: AbortSignal.timeout(this.requestTimeoutMs),
-      });
+      }, this.fetchImpl);
     } catch {
       // Network failure or timeout: no response, no detail worth logging.
       return null;

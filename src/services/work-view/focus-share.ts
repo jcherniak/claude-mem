@@ -10,6 +10,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { premiumFetch } from '../../shared/premium-features.js';
 
 export interface FocusShareEntry {
   token: string;
@@ -171,7 +172,7 @@ export class FocusShares {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.fetchImpl(`${this.options.origin()}${path}`, {
+      const response = await premiumFetch(`${this.options.origin()}${path}`, {
         method,
         headers: {
           Authorization: `Bearer ${token}`,
@@ -183,7 +184,7 @@ export class FocusShares {
         // The bearer goes to cmem.ai only.
         redirect: 'manual',
         signal: controller.signal,
-      });
+      }, this.fetchImpl);
       const text = await response.text();
       let parsed: unknown = null;
       try { parsed = text ? JSON.parse(text) : null; } catch { /* the status still says what happened */ }

@@ -58,6 +58,7 @@
 // timeout.
 
 import { logger } from '../../utils/logger.js';
+import { assertSyncTokenDestination } from '../../shared/premium-features.js';
 import { classifySyncAuthFailure, friendlySyncError, type SyncAuthFailure } from '../../shared/sync-health.js';
 import type { SyncDownloadStatus } from '../../shared/viewer-sync-status.js';
 import type { SyncApply, SyncOp, UndecodableOp } from './SyncApply.js';
@@ -718,6 +719,7 @@ export class SyncClient {
           `${this.hubUrl}/v1/sync/changes?since=${cursor}&limit=${this.pageLimit}`,
           {
             method: 'GET',
+            redirect: 'error',
             headers: this.hubHeaders(),
             // Plain short request — never a held connection (directive #4).
             signal: AbortSignal.timeout(Math.max(1, Math.min(this.requestTimeoutMs, remaining))),
@@ -867,6 +869,7 @@ export class SyncClient {
   }
 
   private hubHeaders(): Record<string, string> {
+    assertSyncTokenDestination(this.token, this.hubUrl);
     return {
       'Authorization': `Bearer ${this.token}`,
       'X-User-Id': this.userId,
@@ -936,6 +939,7 @@ export class SyncClient {
   private async fetchRealtimeGrant(): Promise<RealtimeGrant> {
     const res = await this.fetchImpl(`${this.hubUrl}/v1/sync/realtime-token`, {
       method: 'POST',
+      redirect: 'error',
       headers: this.hubHeaders(),
       signal: AbortSignal.timeout(this.requestTimeoutMs),
     });

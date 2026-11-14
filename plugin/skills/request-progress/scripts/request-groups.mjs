@@ -3115,7 +3115,7 @@ function realpathOrSelf2(dir) {
 }
 function isWithin(child, parent) {
   const relative = path2.relative(parent, child);
-  return relative === "" || !relative.startsWith("..") && !path2.isAbsolute(relative);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path2.sep}`) && !path2.isAbsolute(relative);
 }
 function markerWalkStops() {
   return [homedir7(), tmpdir(), CLAUDE_CONFIG_DIR].flatMap((dir) => {
@@ -4532,11 +4532,27 @@ var init_EnvManager = __esm({
   }
 });
 
+// src/shared/premium-features.ts
+function premiumFeaturesEnabled(environment = process.env) {
+  return environment[PREMIUM_FEATURES_ENV] === "true";
+}
+function isLocalSyncToken(token) {
+  return (token ?? "").trim().startsWith("cmem_sync_");
+}
+var PREMIUM_FEATURES_ENV;
+var init_premium_features = __esm({
+  "src/shared/premium-features.ts"() {
+    "use strict";
+    PREMIUM_FEATURES_ENV = "CLAUDE_MEM_PREMIUM_ENABLED";
+  }
+});
+
 // src/shared/pro-promo.ts
 var PRO_TRIAL_MAX_DAYS, PRO_TRIAL_LABEL, PLAN_USAGE_GAIN_PERCENT, PRO_TRIAL_PITCH;
 var init_pro_promo = __esm({
   "src/shared/pro-promo.ts"() {
     "use strict";
+    init_premium_features();
     PRO_TRIAL_MAX_DAYS = 30;
     PRO_TRIAL_LABEL = `${PRO_TRIAL_MAX_DAYS} Day Free Trial`;
     PLAN_USAGE_GAIN_PERCENT = 100;
@@ -4574,6 +4590,8 @@ function isCmemMemoryKey(apiKey) {
   return (apiKey ?? "").trim().startsWith("cm_pro_");
 }
 function isKeyAllowedForEndpoint(apiUrl, apiKey) {
+  if (isLocalSyncToken(apiKey)) return false;
+  if (isCmemGatewayUrl(apiUrl) && !premiumFeaturesEnabled()) return false;
   return isCmemGatewayUrl(apiUrl) === isCmemMemoryKey(apiKey);
 }
 var init_cmem_gateway = __esm({
@@ -4584,6 +4602,7 @@ var init_cmem_gateway = __esm({
     init_settings_document();
     init_hook_io();
     init_pro_promo();
+    init_premium_features();
     init_relayed_text();
   }
 });

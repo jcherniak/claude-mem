@@ -19,6 +19,7 @@ import { paths } from './paths.js';
 import { describeDuration, scrubErrorMessage } from './observer-health.js';
 import { logger } from '../utils/logger.js';
 import { emitContextInvalidation } from './context-invalidation.js';
+import { premiumFeaturesEnabled } from './premium-features.js';
 
 export const SYNC_HEALTH_FILENAME = 'sync-health.json';
 
@@ -44,6 +45,15 @@ export const SYNC_AUTH_MESSAGES: Record<SyncAuthCode, string> = {
     'Cloud sync is paused: your CMEM Pro trial or subscription is not active. '
     + 'Renew at https://cmem.ai/pro and sync resumes on its own within the hour. Your local memories are safe.',
 };
+
+const LOCAL_SYNC_AUTH_MESSAGES: Record<SyncAuthCode, string> = {
+  invalid_token: 'Sync is paused: this device token is invalid or revoked. Add a replacement device token on your sync server, update this client, then restart claude-mem. Your local memories are safe.',
+  subscription_inactive: 'Sync is paused: the sync server refused account access. Check the account configuration on your sync server. Your local memories are safe.',
+};
+
+function syncAuthMessage(code: SyncAuthCode): string {
+  return (premiumFeaturesEnabled() ? SYNC_AUTH_MESSAGES : LOCAL_SYNC_AUTH_MESSAGES)[code];
+}
 
 /**
  * Classify a sync-server response as an authentication/entitlement failure.
@@ -75,7 +85,7 @@ export function classifySyncAuthFailure(status: number, body: string): SyncAuthF
   ) {
     code = 'subscription_inactive';
   }
-  return { code, status, message: SYNC_AUTH_MESSAGES[code] };
+  return { code, status, message: syncAuthMessage(code) };
 }
 
 /**
@@ -170,8 +180,8 @@ export function renderSyncHealthWarning(state: SyncHealthState | null, nowMs: nu
   if (!shouldWarnSyncHealth(state, nowMs)) return '';
   if (state.state === 'auth_paused') {
     const known = state.code === 'subscription_inactive' || state.code === 'invalid_token'
-      ? SYNC_AUTH_MESSAGES[state.code]
-      : (state.message ?? SYNC_AUTH_MESSAGES.invalid_token);
+      ? syncAuthMessage(state.code)
+      : (state.message ?? syncAuthMessage('invalid_token'));
     return `⚠ ${known}`;
   }
   const since = state.failingSinceAt !== null

@@ -11,6 +11,7 @@ import { USER_SETTINGS_PATH, DB_PATH, DATA_DIR } from '../../shared/paths.js';
 import { MediaStore } from '../media/store.js';
 import { MediaCloudClient, MediaCloudReplicaResolver, MediaCloudSync, mediaCloudUploadsEnabled } from '../media/cloud.js';
 import { cmemProOrigin } from '../../shared/cmem-gateway.js';
+import { hostedSyncToken } from '../../shared/premium-features.js';
 import { MediaError } from '../../shared/media-contract.js';
 import { logger } from '../../utils/logger.js';
 import { clearSyncHealth, defaultSyncHealthFilePath } from '../../shared/sync-health.js';
@@ -85,8 +86,9 @@ export class DatabaseManager {
     // Media upload/deletion runs beside, never inside, native text sync.
     // Queued cloud deletions drain whenever sync credentials exist; uploads
     // additionally require CLAUDE_MEM_MEDIA_CAPTURE_ENABLED.
-    const mediaCloudClient = cloudSyncConfigured
-      ? new MediaCloudClient({ baseUrl: cmemProOrigin(), token: settings.CLAUDE_MEM_CLOUD_SYNC_TOKEN })
+    const mediaToken = hostedSyncToken(settings);
+    const mediaCloudClient = cloudSyncConfigured && mediaToken
+      ? new MediaCloudClient({ baseUrl: cmemProOrigin(), token: mediaToken })
       : null;
     this.mediaReplicaResolver = new MediaCloudReplicaResolver(this.mediaStore, mediaCloudClient);
     if (mediaCloudClient) {

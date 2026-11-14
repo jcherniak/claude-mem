@@ -133,6 +133,7 @@ export interface ProjectCatalog {
 }
 
 export interface Settings {
+  CLAUDE_MEM_PREMIUM_ENABLED?: string;
   CLAUDE_MEM_MODEL: string;
   CLAUDE_MEM_CONTEXT_OBSERVATIONS: string;
   CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES?: string;

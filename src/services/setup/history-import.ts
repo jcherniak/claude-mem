@@ -12,6 +12,7 @@
 import type { Database } from 'bun:sqlite';
 import type { HistoryImportRunState } from '../../shared/setup-funnel.js';
 import { logger } from '../../utils/logger.js';
+import { isLocalSyncToken, premiumFeaturesEnabled, premiumFetch } from '../../shared/premium-features.js';
 
 export const HISTORY_IMPORT_BATCH = 100;
 
@@ -83,6 +84,7 @@ export class HistoryImport {
   start(): HistoryImportState {
     if (this.running) return this.state();
     const token = this.options.token();
+    if (!premiumFeaturesEnabled() || isLocalSyncToken(token)) throw new Error('Hosted memory import is disabled for this configuration.');
     if (!token) throw new Error('Bringing your memory needs CMEM Pro on this computer. Finish checkout first.');
     this.running = this.run(token).finally(() => { this.running = null; });
     return this.state();
@@ -99,7 +101,7 @@ export class HistoryImport {
   private iso(): string { return new Date((this.options.now ?? Date.now)()).toISOString(); }
 
   private async run(token: string): Promise<void> {
-    const request = this.options.fetch ?? fetch;
+    const request: typeof fetch = ((input, init) => premiumFetch(input, init, this.options.fetch)) as typeof fetch;
     const url = `${this.options.origin()}/api/import`;
     let database: Database | undefined;
     try {

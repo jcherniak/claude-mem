@@ -89,14 +89,19 @@ Merely changing URLs does not migrate already-acknowledged rows. Preserve the
 existing local database. Do not reset `synced_at`, device IDs, or cursors to
 force uploads.
 
-### Client limitation
+### Client privacy and premium features
 
-This deployment changes the server only. Current upstream clients can still
-send `CLAUDE_MEM_CLOUD_SYNC_TOKEN` to cmem.ai for optional media and My Work
-features, independently of the configured sync hub. Those features are not
-provided by this server. A separate client guard is needed if the local token
-must never be sent to cmem.ai. Changing the hub URL alone does not disable all
-hosted-feature traffic.
+Use this fork's client bundles. Hosted premium features are disabled by default.
+The installer, viewer, My Work, TeamBrain, hosted setup, media uploads, and CMEM
+model gateway require `CLAUDE_MEM_PREMIUM_ENABLED=true` in the client process
+environment. Restart the worker after changing this environment setting.
+The settings API reports the effective value, but settings JSON cannot enable it.
+Local memory, personal model subscriptions, and self-hosted sync remain available.
+
+Local device tokens (`cmem_sync_…`) cannot authenticate hosted premium requests,
+even with premium features enabled. Sync requests reject CMEM destinations for
+these tokens and do not follow redirects. Hosted features require separate CMEM
+credentials. This server does not provide hosted premium features.
 
 ## Authentication and projection options
 

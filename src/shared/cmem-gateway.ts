@@ -29,6 +29,7 @@ import { SettingsDefaultsManager } from './SettingsDefaultsManager.js';
 import { updateSettingsDocument } from './settings-document.js';
 import { emitDiagnostic } from './hook-io.js';
 import { proTrialUrl } from './pro-promo.js';
+import { isLocalSyncToken, premiumFeaturesEnabled } from './premium-features.js';
 import { relayedLine, relayedLink } from './relayed-text.js';
 
 /**
@@ -142,6 +143,8 @@ export function isCmemMemoryKey(apiKey: string | undefined | null): boolean {
  * leave for the wrong host.
  */
 export function isKeyAllowedForEndpoint(apiUrl: string, apiKey: string): boolean {
+  if (isLocalSyncToken(apiKey)) return false;
+  if (isCmemGatewayUrl(apiUrl) && !premiumFeaturesEnabled()) return false;
   return isCmemGatewayUrl(apiUrl) === isCmemMemoryKey(apiKey);
 }
 
@@ -156,7 +159,9 @@ export function isKeyAllowedForEndpoint(apiUrl: string, apiKey: string): boolean
  *    pasted into any provider's settings never leaves for a third party.
  */
 export function keysForEndpoint(apiUrl: string, keys: readonly string[]): string[] {
+  keys = keys.filter(key => !isLocalSyncToken(key));
   if (isCmemGatewayUrl(apiUrl)) {
+    if (!premiumFeaturesEnabled()) return [];
     const accountKey = keys.find(key => isCmemMemoryKey(key));
     return accountKey ? [accountKey] : [];
   }
@@ -189,6 +194,7 @@ const PRO_FALLBACK_KEYS = [
  * is true for every account.
  */
 export function proFallbackNotice(notice: ProFallbackNotice, role: CmemGatewayRole = 'primary'): string {
+  if (!premiumFeaturesEnabled()) return 'Hosted premium features are disabled. Use a personal model provider.';
   const message = relayedLine(notice.message) || 'cmem.ai memory is paused for this account.';
   const action = relayedLine(notice.action);
   // As the opt-in quota fallback the gateway never had memory: nothing moved

@@ -199,6 +199,7 @@ export function scrubErrorMessage(message: string): string {
   return message
     .replace(/\bsk-[A-Za-z0-9_-]{8,}/g, 'sk-…')
     .replace(/\bcm_pro_[A-Za-z0-9_-]{8,}/g, 'cm_pro_…')
+    .replace(/\bcmem_sync_[A-Za-z0-9_-]+/g, 'cmem_sync_…')
     .replace(/\b(Bearer|Basic|Digest|Token)\s+[^\s"']+/gi, '$1 …')
     // Numbers are limits/counts, not credentials — `max_tokens: 200000` and
     // `key limit exceeded` style diagnostics survive intact.

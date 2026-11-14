@@ -11,6 +11,7 @@ import { projectRoot } from './session-project.mjs';
 import { readFocusAreas } from './data-source.mjs';
 import { MY_FOCUS_LIST, navWordIn, ownerGoalsAreaRows } from './my-focus.mjs';
 import { logger } from '../../utils/logger.js';
+import { isLocalSyncToken, premiumFeaturesEnabled, premiumFetch } from '../../shared/premium-features.js';
 
 /** Owner-approved cap: the largest measured export was 262 KB, and all exports fit one 1M-context call.
  * Cloud enforces this against both compressed and uncompressed bytes, plus its offline 400k-token budget. */
@@ -160,6 +161,7 @@ export class HostedIntent {
   private iso(): string { return new Date((this.options.now ?? Date.now)()).toISOString(); }
 
   async run(ownerPrompts: OwnerPrompt[], improveProduct: boolean): Promise<void> {
+    if (!premiumFeaturesEnabled() || isLocalSyncToken(this.options.credentials().token)) throw new Error('Hosted setup is disabled for this configuration.');
     // True only between the saved-result checks (their prompts already left in an earlier run) and the upload.
     let stoppedBeforeUpload = false;
     this.current = { state: 'running', reason: 'setup-scan', step: 'goals', agent: null, startedAt: this.iso(), finishedAt: null, error: null };
@@ -206,10 +208,10 @@ export class HostedIntent {
       }
       stoppedBeforeUpload = false;
       // No client retry: a lost response may already have spent this install/account's subsidized run.
-      const response = await (this.options.fetch ?? fetch)(`${origin}/api/pro/intent`, {
+      const response = await premiumFetch(`${origin}/api/pro/intent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip',
           ...headers }, body,
-      });
+      }, this.options.fetch);
       const answer = await this.readResponse(response, true, scope);
       const parsed = resultSchema.safeParse(answer);
       if (!parsed.success) throw new Error(`Hosted setup returned an invalid response: ${parsed.error.message}`);
@@ -240,7 +242,7 @@ export class HostedIntent {
       }, this.options.preflightTimeoutMs ?? INTENT_PREFLIGHT_TIMEOUT_MS);
     });
     const check = async () => {
-      const preflight = await (this.options.fetch ?? fetch)(`${origin}/api/pro/intent`, { method: 'GET', headers, cache: 'no-store', signal: abort.signal });
+      const preflight = await premiumFetch(`${origin}/api/pro/intent`, { method: 'GET', headers, cache: 'no-store', signal: abort.signal }, this.options.fetch);
       return this.readResponse(preflight, false, scope, abort.signal);
     };
     try { return await Promise.race([check(), deadline]); } finally { clearTimeout(timer); }

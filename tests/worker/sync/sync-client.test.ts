@@ -81,6 +81,25 @@ describe('SyncClient', () => {
   let apply: SyncApply;
   let clients: SyncClient[];
 
+  it('does not send a local device token to a CMEM sync destination', async () => {
+    let requests = 0;
+    const client = makeClient((async () => { requests++; return new Response(); }) as typeof fetch,
+      { token: 'cmem_sync_test-only', hubUrl: 'https://sync.cmem.ai' });
+    await client.pullOnce();
+    expect(requests).toBe(0);
+  });
+
+  it('pulls from a self-hosted hub without allowing redirects', async () => {
+    const hub = makeHub({ epoch: 'self-hosted-epoch' });
+    let redirect: RequestRedirect | undefined;
+    const client = makeClient((async (input, init) => { redirect = init?.redirect; return hub.impl(input, init); }) as typeof fetch,
+      { token: 'cmem_sync_test-only' });
+    await client.pullOnce();
+    expect(hub.state.requests).toHaveLength(1);
+    expect(hub.state.requests[0].headers.Authorization).toBe('Bearer cmem_sync_test-only');
+    expect(redirect).toBe('error');
+  });
+
   function makeClient(fetchImpl: typeof fetch, options: Partial<SyncClientOptions> = {}): SyncClient {
     const client = new SyncClient(apply, {
       hubUrl: 'https://hub.test',

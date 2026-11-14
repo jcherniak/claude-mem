@@ -22,6 +22,7 @@ import { parseArgs, styleText } from 'node:util';
 import { hostname } from 'os';
 import { readJsonFileWithBom } from '../../shared/atomic-json.js';
 import { cmemProOrigin } from '../../shared/cmem-gateway.js';
+import { premiumFeaturesEnabled } from '../../shared/premium-features.js';
 import { isConnectionRefusedError } from '../../shared/connection-errors.js';
 import { USER_SETTINGS_PATH } from '../../shared/paths.js';
 import { relayedLine } from '../../shared/relayed-text.js';
@@ -828,6 +829,10 @@ function runStart(): number {
 
 /** Resolves to the process exit code. */
 export async function runTeamBrainCommand(argv: string[] = []): Promise<number> {
+  if (!premiumFeaturesEnabled()) {
+    console.error('TeamBrain requires CLAUDE_MEM_PREMIUM_ENABLED=true.');
+    return 1;
+  }
   const subCommand = argv[0]?.toLowerCase() ?? 'status';
   if (argv.slice(1).some(arg => arg === '--help' || arg === '-h')) {
     console.log(USAGE);

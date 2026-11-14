@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite';
+import { assertSyncTokenDestination } from '../../shared/premium-features.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { CONTENT_KIND_SPECS } from './CloudSync.js';
 import { assertCanonicalDecimal, buildContentOperation, canonicalJson, compareCanonicalDecimals,
@@ -78,6 +79,7 @@ export class SyncConflictRecovery {
   private async request(path: string, body: unknown): Promise<any> {
     let response: Response;
     try {
+      assertSyncTokenDestination(this.config.authToken, this.config.hubUrl);
       response = await this.fetchImpl(`${this.config.hubUrl.replace(/\/$/, '')}${path}`, {
         redirect: 'error',
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.authToken}`,

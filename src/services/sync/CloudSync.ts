@@ -41,6 +41,7 @@
 // before acknowledgment state changes and enters the normal backoff path.
 
 import type { Database } from 'bun:sqlite';
+import { assertSyncTokenDestination } from '../../shared/premium-features.js';
 import { hostname } from 'os';
 import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger.js';
@@ -1154,9 +1155,11 @@ export class CloudSync {
     this.statusProbeAuthFailure = null;
     this.statusProbeSyncMode = null;
     try {
+      assertSyncTokenDestination(this.token, this.hubUrl);
       const signal = AbortSignal.timeout(this.statusTimeoutMs);
       const response = await this.fetchImpl(`${this.hubUrl}/v1/sync/status`, {
         method: 'GET',
+        redirect: 'error',
         headers: {
           'Authorization': `Bearer ${this.token}`,
           'X-User-Id': this.userId,
@@ -1945,12 +1948,14 @@ export class CloudSync {
   }
 
   private async pushOps(ops: WireOp[]): Promise<PushResponse> {
+    assertSyncTokenDestination(this.token, this.hubUrl);
     const requestBody = JSON.stringify({ protocol_version: 2, ops });
     if (Buffer.byteLength(requestBody, 'utf8') > MAX_BODY_BYTES) {
       throw new Error(`sync hub push invariant: request exceeds ${MAX_BODY_BYTES} encoded bytes`);
     }
     const res = await this.fetchImpl(`${this.hubUrl}/v1/sync/ops`, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,

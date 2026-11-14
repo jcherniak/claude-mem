@@ -2,6 +2,7 @@ import { chmodSync, closeSync, fsyncSync, mkdirSync, openSync, readFileSync, wri
 import { dirname, join, resolve } from 'path';
 import { writeJsonFileAtomic } from './atomic-json.js';
 import { resolveDataDir } from './paths.js';
+import { premiumFeaturesEnabled, premiumFetch } from './premium-features.js';
 
 export type IntentCredentials = { install_id: string; intent_token: string };
 
@@ -93,9 +94,10 @@ async function issueCredentials(
     throw new Error(`Hosted intent credential issuance could not be reserved at ${path}.`);
   }
 
-  const response = await (options.fetch ?? globalThis.fetch)(
+  const response = await premiumFetch(
     `${options.origin.replace(/\/+$/, '')}/api/installer/intent`,
     { method: 'POST' },
+    options.fetch,
   );
   let result: unknown;
   try {
@@ -134,6 +136,7 @@ export async function getOrCreateIntentCredentials(options: {
   fetch?: typeof fetch;
   configPath?: string;
 }): Promise<IntentCredentials> {
+  if (!premiumFeaturesEnabled()) throw new Error('Hosted intent requires CLAUDE_MEM_PREMIUM_ENABLED=true.');
   const path = credentialPath(options.configPath);
   const inFlight = issuing.get(path);
   if (inFlight) return inFlight;

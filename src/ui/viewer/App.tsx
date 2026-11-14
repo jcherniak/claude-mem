@@ -562,6 +562,7 @@ export function App() {
           setStoredWelcomeDismissed(false);
           setWelcomeDismissed(false);
         }}
+        premiumEnabled={settingsLoaded && settings.CLAUDE_MEM_PREMIUM_ENABLED === 'true'}
         showTeamBrainLink={settingsLoaded && !settings.CLAUDE_MEM_TEAMBRAIN_URL?.trim()}
       />
 

@@ -21,6 +21,7 @@ interface HeaderProps {
   onShowHelp?: () => void;
   /** Show the TeamBrain link: settings have loaded and this install is in no team. */
   showTeamBrainLink?: boolean;
+  premiumEnabled?: boolean;
 }
 
 export function Header({
@@ -35,7 +36,8 @@ export function Header({
   onThemeChange,
   onContextPreviewToggle,
   onShowHelp,
-  showTeamBrainLink = false
+  showTeamBrainLink = false,
+  premiumEnabled = false
 }: HeaderProps) {
   const { t, locale, setLocale } = useI18n();
   useSpinningFavicon(isProcessing);
@@ -58,7 +60,7 @@ export function Header({
         {/* Most people running the free plugin never learn the trial exists.
             It sits beside the logo (not in .status) so it survives the
             responsive rules that hide the icon links on tablet and mobile. */}
-        <a
+        {premiumEnabled && <a
           className="pro-trial-cta"
           href={PRO_TRIAL_URL}
           target="_blank"
@@ -71,8 +73,8 @@ export function Header({
           </svg>
           <span className="pro-trial-cta-full">{t(PRO_TRIAL_PITCH)}</span>
           <span className="pro-trial-cta-short">{t(PRO_TRIAL_SHORT)}</span>
-        </a>
-        {showTeamBrainLink && (
+        </a>}
+        {premiumEnabled && showTeamBrainLink && (
           <a
             className="teambrain-cta"
             href={TEAMBRAIN_START_URL}

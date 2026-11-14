@@ -476,7 +476,7 @@ describe('replica refs follow accepted revisions only', () => {
 
 describe('media upload state is independent of text sync', () => {
   it('is gated by the capture flag and cloud sync credentials', () => {
-    const base = { CLAUDE_MEM_CLOUD_SYNC_TOKEN: TOKEN, CLAUDE_MEM_CLOUD_SYNC_USER_ID: 'u', CLAUDE_MEM_CLOUD_SYNC_HUB_URL: 'https://hub.test', CLAUDE_MEM_MEDIA_CAPTURE_ENABLED: 'true' };
+    const base = { CLAUDE_MEM_CLOUD_SYNC_TOKEN: TOKEN, CLAUDE_MEM_CLOUD_SYNC_USER_ID: 'u', CLAUDE_MEM_CLOUD_SYNC_HUB_URL: 'https://sync.cmem.ai', CLAUDE_MEM_MEDIA_CAPTURE_ENABLED: 'true' };
     expect(mediaCloudUploadsEnabled(base)).toBe(true);
     expect(mediaCloudUploadsEnabled({ ...base, CLAUDE_MEM_MEDIA_CAPTURE_ENABLED: 'false' })).toBe(false);
     expect(mediaCloudUploadsEnabled({ ...base, CLAUDE_MEM_CLOUD_SYNC_HUB_URL: ' ' })).toBe(false);

@@ -1,3 +1,14 @@
+## Self-hosted sync fork
+
+This fork supports a private PostgreSQL sync server with per-device tokens.
+See [deployment and client configuration](services/sync-api/README.md).
+Hosted premium features are disabled unless the client process environment sets
+`CLAUDE_MEM_PREMIUM_ENABLED=true`. Local device tokens are never used for CMEM
+premium requests, including when this option is enabled.
+
+Use this fork's built client bundles. Keep `CLAUDE_MEM_AUTO_UPDATE=false` on
+clients so an upstream update does not replace these changes.
+
 <h1 align="center">
   <br>
   <a href="https://github.com/thedotmack/claude-mem">

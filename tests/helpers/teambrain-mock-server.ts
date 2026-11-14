@@ -13,7 +13,7 @@ export const MOCK_USER_CODE = 'ABCD-2345';
 export const MOCK_INVITE_TOKEN = 'tb_inviteTokenFixture_0123456789';
 export const MOCK_SEAT_USER_ID = 'user_seat_1';
 export const MOCK_SEAT_SETUP_TOKEN = 'SEAT_SETUP_TOKEN_MUST_NOT_LEAK';
-export const MOCK_HUB_URL = 'https://sync.example.test';
+export const MOCK_HUB_URL = 'https://sync.cmem.ai';
 export const MOCK_TEAM = { id: 'team_1', name: 'Acme Eng' };
 
 export interface RecordedRequest {

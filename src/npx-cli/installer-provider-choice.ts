@@ -1,3 +1,5 @@
+import { premiumFeaturesEnabled } from '../shared/premium-features.js';
+
 type InstallerProviderId = 'claude' | 'gemini' | 'openrouter' | 'host';
 type InstallerProviderChoice = InstallerProviderId | 'cmem';
 
@@ -16,6 +18,6 @@ export function resolveInstallerProviderChoice(
   options: { ide?: string; provider?: InstallerProviderId },
 ): InstallerProviderChoice | undefined {
   if (options.provider) return options.provider;
-  if (options.ide === 'grok-bot') return 'cmem';
+  if (options.ide === 'grok-bot' && premiumFeaturesEnabled()) return 'cmem';
   return undefined;
 }

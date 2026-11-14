@@ -52,6 +52,7 @@ import {
 } from '../cmem-pro-costs.js';
 import { clearProFallback, isCmemGatewayUrl } from '../../shared/cmem-gateway.js';
 import { PRO_TRIAL_LABEL, PRO_TRIAL_PITCH, proTrialUrl } from '../../shared/pro-promo.js';
+import { premiumFeaturesEnabled } from '../../shared/premium-features.js';
 import {
   buildAnthropicMaxLocalSettings,
   buildCmemActivationSettings,
@@ -1418,13 +1419,13 @@ export async function promptProvider(
       const providerResult = await p.multiselect<ProviderChoice>({
         message: PROVIDER_PROMPT_MESSAGE,
         options: [
-          { value: 'cmem', label: labels.cmem, hint: labels.cmemHint },
+          ...(premiumFeaturesEnabled() ? [{ value: 'cmem' as const, label: labels.cmem, hint: labels.cmemHint }] : []),
           { value: 'claude', label: labels.claude, hint: labels.claudeHint },
         ],
         // CMEM Pro pre-selected: it is the recommended path and the one the
         // funnel is built around. Selecting it no longer means "pay now" —
         // it opens the offer page to read first.
-        initialValues: ['cmem'],
+        initialValues: [premiumFeaturesEnabled() ? 'cmem' : 'claude'],
         required: true,
       });
       // @clack/prompts 1.8: isCancel narrows to unique CANCEL_SYMBOL, not generic symbol.
@@ -1444,6 +1445,7 @@ export async function promptProvider(
   // OpenAI-compatible client whose endpoint and model both come from settings,
   // so "use the CMEM observer model" is four settings writes and nothing else.
   if (selectedProvider === 'cmem') {
+    if (!premiumFeaturesEnabled()) throw new Error('Set CLAUDE_MEM_PREMIUM_ENABLED=true to configure CMEM Pro.');
     if (!pairing && signIn) {
       pairing = await signIn();
       if (!pairing) {
@@ -1911,6 +1913,7 @@ export function buildInstallerOAuthStartBody(
 export async function startInstallerOAuthPairing(
   opts: { source?: string; timeoutMs?: number; teamInvite?: string; setupFlowId?: string } = {},
 ): Promise<InstallerOAuthPairing | null> {
+  if (!premiumFeaturesEnabled()) return null;
   const source = opts.source ?? 'npx-installer';
   lastStartFailure = null;
   lastStartErrorMessage = null;
@@ -2373,6 +2376,7 @@ async function requireInstallerOAuthLogin(version: string): Promise<InstallerOAu
  * The server ignores `source` today and will allowlist it separately.
  */
 export async function offerDeferredLogin(options: InstallOptions, version: string): Promise<void> {
+  if (!premiumFeaturesEnabled()) return;
   if (options.update) return;
   if (isInteractive) return;
   if (providerNeedsAccount(options.provider)) return;
@@ -2666,7 +2670,7 @@ async function promptTelemetryOptIn(): Promise<void> {
  * CMEM Pro, so login must happen first.
  */
 export function providerNeedsAccount(provider: InstallOptions['provider']): boolean {
-  return provider !== 'claude' && provider !== 'host';
+  return premiumFeaturesEnabled() && provider !== 'claude' && provider !== 'host';
 }
 
 export interface InstallOptions {
@@ -2940,6 +2944,7 @@ async function completeUpdateProviderSetup(options: InstallOptions, version: str
   if (!isInteractive) throw new Error('Provider credentials are missing. Run npx claude-mem update in an interactive terminal to finish setup.');
   log.info(`The configured ${options.provider} provider needs its missing API key to finish setup.`);
   if (missing.cmemGateway) {
+    if (!premiumFeaturesEnabled()) throw new Error('CMEM Pro requires CLAUDE_MEM_PREMIUM_ENABLED=true. Select a personal provider to keep premium features disabled.');
     const pairing = await requireInstallerOAuthLogin(version);
     const enrollment = pairing && await completeCmemTrialPairing(pairing, version);
     if (!enrollment || !enrollment.memory || !activateBrowserEnrollment(enrollment)) {
@@ -3227,10 +3232,11 @@ async function runInstallCommandInner(options: InstallOptions, summary: InstallS
       options.providerSource = 'persisted';
     }
   }
-  const resumeSetup = options.setup === 'resume';
+  if (options.setup && !premiumFeaturesEnabled()) throw new Error('Hosted setup requires CLAUDE_MEM_PREMIUM_ENABLED=true.');
+  const resumeSetup = premiumFeaturesEnabled() && options.setup === 'resume';
   const defaultDeferredSetup = !isInteractive && !options.update && !options.provider && !options.ide && !options.noAutoStart
     && (!options.runtime || options.runtime === 'worker') && !isInstallRunByAutoUpdate();
-  const deferSetup = options.setup === 'defer' || (!options.setup && defaultDeferredSetup);
+  const deferSetup = premiumFeaturesEnabled() && (options.setup === 'defer' || (!options.setup && defaultDeferredSetup));
   if (!deferSetup && options.setup !== 'browser' && !resumeSetup) validateNonInteractiveProvider(options, summary);
   // Captured by the runtime-setup task below; reported on install_completed
   // so funnel dropoff can be sliced by toolchain versions.
@@ -3294,14 +3300,14 @@ async function runInstallCommandInner(options: InstallOptions, summary: InstallS
   if (claudeCodeTooOldWarning) log.warn(claudeCodeTooOldWarning);
 
   const setupComplete = savedSetup.status === 'complete';
-  const browserSetup = deferSetup || resumeSetup || options.setup === 'browser' || shouldUseBrowserSetup({
+  const browserSetup = premiumFeaturesEnabled() && (deferSetup || resumeSetup || options.setup === 'browser' || shouldUseBrowserSetup({
     interactive: isInteractive, provider: options.provider, noAutoStart: options.noAutoStart,
     runtime: normalizeRuntimeFlag(options.runtime ?? 'worker') ?? 'worker', setupComplete, update: options.update,
-  });
+  }));
   const resumedState = resumeSetup ? readSetupState() : null;
   if (resumeSetup && !resumedState?.install) throw new Error('There is no deferred setup to resume.');
   const installCatalog = resumedState?.install?.catalog ?? (browserSetup ? browserInstallCatalog(options, alreadyInstalled) : null);
-  if (!browserSetup && !options.update) await promptEmailOptIn(version);
+  if (premiumFeaturesEnabled() && !browserSetup && !options.update) await promptEmailOptIn(version);
 
   if (alreadyInstalled && !browserSetup && !options.update) {
     if (process.stdin.isTTY) {
@@ -3816,7 +3822,7 @@ async function runInstallCommandInner(options: InstallOptions, summary: InstallS
     `Agents:      ${styleText('cyan', selectedIDEs.join(', '))}`,
   ];
   summaryLines.push(`Account:     ${styleText('cyan', browserAccountStatus ?? accountStatus)}`);
-  summaryLines.push(`Cloud sync:  ${styleText('cyan', cloudSyncConfigured ? 'ON (CMEM Pro)' : 'OFF (local)')}`);
+  summaryLines.push(`Cloud sync:  ${styleText('cyan', cloudSyncConfigured ? 'ON (configured server)' : 'OFF (local)')}`);
   if (autoMemoryStatus === 'disabled') {
     summaryLines.push(`Auto-memory: ${styleText('cyan', 'disabled')} (CLAUDE_CODE_DISABLE_AUTO_MEMORY=1)`);
   } else if (autoMemoryStatus === 'already-disabled') {
@@ -3942,9 +3948,9 @@ async function runInstallCommandInner(options: InstallOptions, summary: InstallS
     ``,
     `Memory injection starts on your second session in a project.`,
     cloudSyncConfigured
-      ? 'Memory syncs across your signed-in CMEM Pro agents and devices.'
+      ? 'Memory syncs through your configured sync server.'
       : `Everything stays in ${styleText('cyan', '~/.claude-mem')} on this machine. cmem.ai gets only your email and optional note (with the claude-mem version and OS) if you share them when an interactive terminal install asks, and a numbers-only usage summary (observation counts and token totals, no prompts, paths, or project names) when setup creates a sign-in link; nothing else is sent to cmem.ai unless you choose to upload your prompts during browser setup (telemetry is separate: npx claude-mem telemetry).`,
-    ...(cloudSyncConfigured ? [] : [`${PRO_TRIAL_PITCH}: ${styleText('underline', proTrialUrl('installer'))}`]),
+    ...(cloudSyncConfigured || !premiumFeaturesEnabled() ? [] : [`${PRO_TRIAL_PITCH}: ${styleText('underline', proTrialUrl('installer'))}`]),
     ``,
     `${styleText('dim', `Optional: ${'/learn-codebase'} ingests a whole repo up front (~5 min)   ·   How it works: /how-it-works`)}`,
   ];

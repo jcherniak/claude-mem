@@ -26,9 +26,9 @@ describe('install help text (#4131)', () => {
 
   // A headless `--runtime server --provider openrouter` install blocked on a
   // browser login the help never mentioned.
-  it('says which providers need a cmem.ai sign-in, matching providerNeedsAccount', () => {
+  it('explains that personal providers need no account with premium disabled', () => {
     expect(providerLine).toBeDefined();
-    expect(providerLine).toContain('codex, gemini and openrouter need a cmem.ai sign-in');
-    expect(providerLine).toContain('claude and host need no claude-mem account');
+    expect(providerLine).toContain('Use your own model provider.');
+    expect(providerLine).toContain('No claude-mem account is required when premium features are disabled.');
   });
 });
