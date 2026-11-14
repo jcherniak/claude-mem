@@ -89,6 +89,15 @@ Merely changing URLs does not migrate already-acknowledged rows. Preserve the
 existing local database. Do not reset `synced_at`, device IDs, or cursors to
 force uploads.
 
+### Client limitation
+
+This deployment changes the server only. Current upstream clients can still
+send `CLAUDE_MEM_CLOUD_SYNC_TOKEN` to cmem.ai for optional media and My Work
+features, independently of the configured sync hub. Those features are not
+provided by this server. A separate client guard is needed if the local token
+must never be sent to cmem.ai. Changing the hub URL alone does not disable all
+hosted-feature traffic.
+
 ## Authentication and projection options
 
 The API itself retains upstream defaults: `SYNC_AUTH_MODE=cmem` and
