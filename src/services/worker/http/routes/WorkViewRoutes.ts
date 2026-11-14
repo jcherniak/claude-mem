@@ -35,6 +35,7 @@ import { FocusShareError, FocusShares } from '../../../work-view/focus-share.js'
 import { FocusSharePublisher } from '../../../work-view/focus-share-publisher.js';
 import { cmemProOrigin } from '../../../../shared/cmem-gateway.js';
 import { hostedSyncToken, premiumFeaturesEnabled } from '../../../../shared/premium-features.js';
+import { trustedTailscaleDashboardRequest } from '../tailscale-dashboard.js';
 import { isOpenRouterApiUrl } from '../../../../shared/openrouter-base-url.js';
 import { FOCUS_CHANGED_MESSAGE, focusChangeVersion } from '../../../../shared/focus-change-version.js';
 import { runAgentTask } from '../../../agent-runner/run.js';
@@ -108,9 +109,8 @@ const reviewBody = z.object({
   checked: z.boolean(),
 }).strict();
 
-// The viewer is local even when another worker surface is explicitly exposed.
-// Match the existing request-auth helpers, including rejecting proxy headers.
 export function workViewLoopbackOnly(req: Request, res: Response, next: NextFunction): void {
+  if (trustedTailscaleDashboardRequest(req)) { next(); return; }
   if (!isLocalhost(req) || !hasLoopbackHostHeader(req) || hasForwardedClientHeaders(req)) {
     res.status(403).json({ error: 'Work view is available only on this computer.' });
     return;

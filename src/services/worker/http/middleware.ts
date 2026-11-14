@@ -45,7 +45,7 @@ export function refuseFramingExceptObservationTv(req: Request, res: Response, ne
   next();
 }
 
-export function createMiddleware(): RequestHandler[] {
+export function createMiddleware(options: { serveUi?: boolean } = {}): RequestHandler[] {
   // First, so it covers both static UI mounts and every route after them.
   const middlewares: RequestHandler[] = [refuseFramingExceptObservationTv];
 
@@ -80,9 +80,11 @@ export function createMiddleware(): RequestHandler[] {
     next();
   });
 
-  const packageRoot = getPackageRoot();
-  const uiDir = path.join(packageRoot, 'plugin', 'ui');
-  middlewares.push(express.static(uiDir));
+  if (options.serveUi !== false) {
+    const packageRoot = getPackageRoot();
+    const uiDir = path.join(packageRoot, 'plugin', 'ui');
+    middlewares.push(express.static(uiDir));
+  }
 
   return middlewares;
 }

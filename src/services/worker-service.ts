@@ -34,6 +34,7 @@ import { HookSpoolRoutes } from './worker/http/routes/HookSpoolRoutes.js';
 import { HOOK_TIMEOUTS } from '../shared/hook-constants.js';
 import { getUptimeSeconds } from '../shared/uptime.js';
 import { SettingsDefaultsManager } from '../shared/SettingsDefaultsManager.js';
+import { resolveWorkerMode, workerDashboardEnabled } from '../shared/worker-mode.js';
 import { readLocalApiToken } from '../shared/hook-settings.js';
 import { describeObserverAuthMethod } from './worker/observer-auth-method.js';
 import { logger } from '../utils/logger.js';
@@ -322,6 +323,8 @@ function readAndClearCleanShutdownSentinel(): string | null {
 }
 
 export class WorkerService implements WorkerRef {
+  private readonly workerMode = resolveWorkerMode(SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH));
+  private readonly dashboardEnabled = workerDashboardEnabled(this.workerMode);
   private readonly deepSearchClient = new DeepSearchClient(DB_PATH);
   private server: Server;
   private startTime: number = Date.now();
@@ -360,7 +363,7 @@ export class WorkerService implements WorkerRef {
   private settingsManager: SettingsManager;
   private sessionEventBroadcaster: SessionEventBroadcaster;
   private completionHandler: SessionCompletionHandler;
-  private corpusStore: CorpusStore;
+  private corpusStore: CorpusStore | null;
 
   private searchRoutes: SearchRoutes | null = null;
   private corpusRoutes: CorpusRoutes | null = null;
@@ -404,7 +407,7 @@ export class WorkerService implements WorkerRef {
     this.sessionManager = new SessionManager(this.dbManager);
     this.sseBroadcaster = new SSEBroadcaster();
     this.memoryFeedInvalidation = new MemoryFeedInvalidation(this.sseBroadcaster);
-    this.memoryFeedInvalidation.start();
+    if (this.dashboardEnabled) this.memoryFeedInvalidation.start();
     this.sdkAgent = new ClaudeProvider(this.dbManager, this.sessionManager);
     this.geminiAgent = new GeminiProvider(this.dbManager, this.sessionManager);
     this.openRouterAgent = new OpenRouterProvider(this.dbManager, this.sessionManager);
@@ -419,7 +422,7 @@ export class WorkerService implements WorkerRef {
       this.sessionEventBroadcaster,
       this.dbManager,
     );
-    this.corpusStore = new CorpusStore();
+    this.corpusStore = this.dashboardEnabled ? new CorpusStore() : null;
 
     setIngestContext({
       sessionManager: this.sessionManager,
@@ -450,6 +453,7 @@ export class WorkerService implements WorkerRef {
     const localApiToken = readLocalApiToken();
 
     this.server = new Server({
+      workerMode: this.workerMode,
       getInitializationComplete: () => this.initializationCompleteFlag,
       initPhaseSource: this.initPhaseTracker,
       getMcpReady: () => this.mcpReady,
@@ -815,15 +819,18 @@ export class WorkerService implements WorkerRef {
    * whether its job runs cannot be read.
    */
   private runningBackgroundJobNames(): string[] {
-    if (this.workViewRoutes == null) {
+    if (this.dashboardEnabled === false && !this.initializationCompleteFlag) {
+      throw new Error('Engine-only worker initialization has not completed');
+    }
+    if (this.dashboardEnabled && this.workViewRoutes == null) {
       throw new Error('My Work\'s routes are not mounted (background initialization has not reached them, or failed before it did), so its extraction run, history import and card wording cannot be read');
     }
-    if (this.corpusRoutes == null) {
+    if (this.dashboardEnabled && this.corpusRoutes == null) {
       throw new Error('The corpus routes are not registered (background initialization has not reached them, or failed before it did), so a corpus build cannot be read');
     }
-    const running: string[] = [...this.workViewRoutes.backgroundWorkRunning({ countScanWaitingForUploadAnswer: false })];
-    if (this.workViewRoutes.cardWordingRequestsRunning() > 0) running.push('my-work-card-wording');
-    if (this.corpusRoutes.corpusBuildsRunning() > 0) running.push('corpus-build');
+    const running: string[] = [...(this.workViewRoutes?.backgroundWorkRunning({ countScanWaitingForUploadAnswer: false }) ?? [])];
+    if ((this.workViewRoutes?.cardWordingRequestsRunning() ?? 0) > 0) running.push('my-work-card-wording');
+    if ((this.corpusRoutes?.corpusBuildsRunning() ?? 0) > 0) running.push('corpus-build');
     if (this.sessionManager.getSessionWrapupsInFlight() > 0) running.push('telegram-session-wrapup');
     return running;
   }
@@ -932,7 +939,7 @@ export class WorkerService implements WorkerRef {
       SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH).CLAUDE_MEM_WORKER_INGEST_MAX_BYTES,
     ));
 
-    this.server.registerRoutes(new ViewerRoutes(this.sseBroadcaster, this.dbManager, this.sessionManager));
+    if (this.dashboardEnabled) this.server.registerRoutes(new ViewerRoutes(this.sseBroadcaster, this.dbManager, this.sessionManager));
     const sessionRoutes = new SessionRoutes(this.sessionManager, this.dbManager, this.sdkAgent, this.geminiAgent, this.openRouterAgent, this.sessionEventBroadcaster, this, this.completionHandler, this.codexAgent, this.openAICompatAgent);
     this.server.registerRoutes(sessionRoutes);
     this.startPendingSessionResume(sessionRoutes);
@@ -1154,45 +1161,47 @@ export class WorkerService implements WorkerRef {
 
       // Work View starts background refresh in its constructor. Keep every
       // read-only handle behind successful schema checks and migrations (#5127).
-      this.sharedWorkSync = new SharedWorkSync(this.dbManager.getConnection(), {
-        databasePath: DB_PATH, directory: path.join(DATA_DIR, 'work-view'),
-        deviceId: this.dbManager.getSessionStore().getLocalSyncDeviceId(),
-        notify: () => this.dbManager.getCloudSync()?.notify(),
-        enabled: settings.CLAUDE_MEM_WORK_VIEW_SHARED_STATE === 'true',
-      });
-      this.sharedWorkSync.start();
-      this.workViewRoutes = new WorkViewRoutes({
-        ...(settings.CLAUDE_MEM_WORK_VIEW_SHARED_STATE === 'true' ? {
-          persistSharedCopy: (requestId: string, entry: { fingerprint: string; copy: unknown; generatedAt: number }) => this.sharedWorkSync!.persistCopy(requestId, entry),
-          saveSharedLedgerFile: (name: string, value: unknown) => this.sharedWorkSync!.saveFile(name, value),
-          saveSharedReview: input => this.sharedWorkSync!.saveReview(input),
-          prepareSharedOwnerAction: () => this.sharedWorkSync!.prepareOwnerAction(),
-          answerSharedSuggestion: (conversationKey, action, expectedHash) => this.sharedWorkSync!.answerSuggestion(conversationKey, action, expectedHash),
-        } : {}),
-        getSharedStatus: () => this.sharedWorkSync?.status() ?? { enabled: false },
-        getSyncStatus: () => this.viewerSync.getSnapshot(),
-        updateViewerActivity: (id, visible, sequence) => this.viewerActivity.update(id, visible, sequence),
-        getLocalDeviceId: () => this.dbManager.getSessionStore().getLocalSyncDeviceId(),
-        // My Rules saves as work-state rows, so a rule change syncs like any other write.
-        appendWorkStateEntry: (entry) => {
-          this.dbManager.getSessionStore().appendWorkStateEntry(entry);
-          this.dbManager.getCloudSync()?.notify();
-        },
-        // The install funnel's Scan step stores typed prompts read from every agent's transcripts.
-        // Hook rows an agent wrote are kept out of goals, work and rules extraction.
-        setupScan: new SetupScan({
-          getStore: () => this.dbManager.getSessionStore(),
-          // Hosted setup does not probe or wait for an agent login.
-          saveAgentWrittenPromptIds: promptIds => writeJsonAtomic(path.join(DATA_DIR, 'work-view', AGENT_WRITTEN_PROMPTS_FILE), { promptIds, updatedAt: new Date().toISOString() }),
-        }),
-        // Finish Setup's history upload to CMEM Pro, with the setup token checkout saved.
-        historyImport: new HistoryImport({
-          openDatabase: () => new BunDatabase(DB_PATH, { readonly: true, create: false }),
-          origin: () => cmemProOrigin(),
-          token: () => hostedSyncToken(SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH)),
-        }),
-      });
-      this.server.registerRoutes(this.workViewRoutes);
+      if (this.dashboardEnabled) {
+        this.sharedWorkSync = new SharedWorkSync(this.dbManager.getConnection(), {
+          databasePath: DB_PATH, directory: path.join(DATA_DIR, 'work-view'),
+          deviceId: this.dbManager.getSessionStore().getLocalSyncDeviceId(),
+          notify: () => this.dbManager.getCloudSync()?.notify(),
+          enabled: settings.CLAUDE_MEM_WORK_VIEW_SHARED_STATE === 'true',
+        });
+        this.sharedWorkSync.start();
+        this.workViewRoutes = new WorkViewRoutes({
+          ...(settings.CLAUDE_MEM_WORK_VIEW_SHARED_STATE === 'true' ? {
+            persistSharedCopy: (requestId: string, entry: { fingerprint: string; copy: unknown; generatedAt: number }) => this.sharedWorkSync!.persistCopy(requestId, entry),
+            saveSharedLedgerFile: (name: string, value: unknown) => this.sharedWorkSync!.saveFile(name, value),
+            saveSharedReview: input => this.sharedWorkSync!.saveReview(input),
+            prepareSharedOwnerAction: () => this.sharedWorkSync!.prepareOwnerAction(),
+            answerSharedSuggestion: (conversationKey, action, expectedHash) => this.sharedWorkSync!.answerSuggestion(conversationKey, action, expectedHash),
+          } : {}),
+          getSharedStatus: () => this.sharedWorkSync?.status() ?? { enabled: false },
+          getSyncStatus: () => this.viewerSync.getSnapshot(),
+          updateViewerActivity: (id, visible, sequence) => this.viewerActivity.update(id, visible, sequence),
+          getLocalDeviceId: () => this.dbManager.getSessionStore().getLocalSyncDeviceId(),
+          // My Rules saves as work-state rows, so a rule change syncs like any other write.
+          appendWorkStateEntry: (entry) => {
+            this.dbManager.getSessionStore().appendWorkStateEntry(entry);
+            this.dbManager.getCloudSync()?.notify();
+          },
+          // The install funnel's Scan step stores typed prompts read from every agent's transcripts.
+          // Hook rows an agent wrote are kept out of goals, work and rules extraction.
+          setupScan: new SetupScan({
+            getStore: () => this.dbManager.getSessionStore(),
+            // Hosted setup does not probe or wait for an agent login.
+            saveAgentWrittenPromptIds: promptIds => writeJsonAtomic(path.join(DATA_DIR, 'work-view', AGENT_WRITTEN_PROMPTS_FILE), { promptIds, updatedAt: new Date().toISOString() }),
+          }),
+          // Finish Setup's history upload to CMEM Pro, with the setup token checkout saved.
+          historyImport: new HistoryImport({
+            openDatabase: () => new BunDatabase(DB_PATH, { readonly: true, create: false }),
+            origin: () => cmemProOrigin(),
+            token: () => hostedSyncToken(SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH)),
+          }),
+        });
+        this.server.registerRoutes(this.workViewRoutes);
+      }
       this.initPhaseTracker.setInitPhase('db_ready');
 
       // Write hooks never wait on the worker: they spool one file per event.
@@ -1309,27 +1318,29 @@ export class WorkerService implements WorkerRef {
       this.contextCacheService.start();
       logger.info('WORKER', 'SearchManager initialized and search routes registered');
 
-      const corpusBuilder = new CorpusBuilder(
-        this.dbManager.getSessionStore(),
-        searchManager.getOrchestrator(),
-        this.corpusStore
-      );
-      // The corpus agent is the Claude Agent SDK unless CLAUDE_MEM_CORPUS_AGENT
-      // is "api". The setting is read on every call, so this one instance
-      // serves a change without a restart (see knowledge/CorpusAgent.ts).
-      const corpusAgent = await createCorpusAgent(this.corpusStore);
-      this.corpusRoutes = new CorpusRoutes(this.corpusStore, corpusBuilder, corpusAgent);
-      this.server.registerRoutes(this.corpusRoutes);
-      logger.info('WORKER', 'CorpusRoutes registered');
+      if (this.corpusStore) {
+        const corpusBuilder = new CorpusBuilder(
+          this.dbManager.getSessionStore(),
+          searchManager.getOrchestrator(),
+          this.corpusStore
+        );
+        // The corpus agent is the Claude Agent SDK unless CLAUDE_MEM_CORPUS_AGENT
+        // is "api". The setting is read on every call, so this one instance
+        // serves a change without a restart (see knowledge/CorpusAgent.ts).
+        const corpusAgent = await createCorpusAgent(this.corpusStore);
+        this.corpusRoutes = new CorpusRoutes(this.corpusStore, corpusBuilder, corpusAgent);
+        this.server.registerRoutes(this.corpusRoutes);
+        logger.info('WORKER', 'CorpusRoutes registered');
+      }
 
       // Cloud sync status endpoint. Registered late (SearchRoutes pattern)
       // because it reads dbManager.getCloudSync(), which exists only after
       // dbManager.initialize() above — and unconditionally, so an
       // unconfigured install answers {configured: false} instead of 404.
-      this.server.registerRoutes(new CloudSyncRoutes(this.dbManager, this.viewerSync));
+      this.server.registerRoutes(new CloudSyncRoutes(this.dbManager, this.dashboardEnabled ? this.viewerSync : undefined));
       this.server.registerRoutes(new SyncRecoveryRoutes(this.dbManager));
       logger.info('WORKER', 'CloudSyncRoutes registered');
-      this.viewerSync.start();
+      if (this.dashboardEnabled) this.viewerSync.start();
       // TeamBrain proxy for the team_* MCP tools, beside cloud sync because it
       // signs with the same credentials. Settings are read per request, so a
       // join or leave applies without a restart.

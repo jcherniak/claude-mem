@@ -30,6 +30,7 @@ import type { ChromaCrashState } from '../sync/ChromaMcpManager.js';
 import { clearWindowsListenSocketInherit } from '../../shared/windows-listen-socket.js';
 import { TERMINAL_INIT_PHASES, type InitPhaseSource, type InitPhaseState } from './init-phase.js';
 import { RUNTIME_SKILLS } from '../../shared/runtime-skills.js';
+import { WORKER_MODE_LABELS, workerDashboardEnabled, type WorkerMode } from '../../shared/worker-mode.js';
 
 /**
  * Keep-alive comment cadence on GET /api/ready. Clients treat 5 s of silence
@@ -118,6 +119,7 @@ export interface AiStatus {
 }
 
 export interface ServerOptions {
+  workerMode?: WorkerMode;
   getInitializationComplete: () => boolean;
   /**
    * Boot progress for GET /api/ready (the worker's InitPhaseTracker). Absent
@@ -347,7 +349,7 @@ export class Server {
       this.trackRequestActivity(res);
       next();
     });
-    const middlewares = createMiddleware();
+    const middlewares = createMiddleware({ serveUi: this.options.workerMode === undefined || workerDashboardEnabled(this.options.workerMode) });
     middlewares.forEach(mw => this.app.use(mw));
   }
 
@@ -466,6 +468,7 @@ export class Server {
       res.status(queueDegraded ? 503 : 200).json({
         status: queueDegraded ? 'degraded' : 'ok',
         ...(this.options.runtime ? { runtime: this.options.runtime } : {}),
+        ...(this.options.workerMode ? { workerMode: this.options.workerMode, workerModeLabel: WORKER_MODE_LABELS[this.options.workerMode] } : {}),
         version: BUILT_IN_VERSION,
         workerPath: this.options.workerPath,
         uptime: getUptimeSeconds(this.startTime),

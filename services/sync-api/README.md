@@ -103,6 +103,31 @@ even with premium features enabled. Sync requests reject CMEM destinations for
 these tokens and do not follow redirects. Hosted features require separate CMEM
 credentials. This server does not provide hosted premium features.
 
+## Engine-only clients and the dashboard
+
+Set `CLAUDE_MEM_WORKER_MODE` to `engine-only` on capture clients, or `full`
+(the default) on the dashboard host. Restart the worker after changing it.
+Engine-only mode keeps observation processing, SQLite, recall, hook endpoints,
+and saved-record sync. It does not construct My Work, its refresh/copy workers,
+the corpus service, viewer routes, static UI middleware, or viewer refresh timers.
+This does not replay missed inference inputs or change provider authentication.
+
+For SQLite-only search, also set `CLAUDE_MEM_CHROMA_ENABLED=false`. This saves
+the optional vector service but removes vector search. Existing saved records
+and text search remain available. Keep `CLAUDE_MEM_AUTO_UPDATE=false` to retain
+this fork. Premium features remain disabled unless explicitly enabled.
+
+Only the dashboard host needs a Tailscale Serve endpoint. Bind its worker to
+loopback. Add the exact HTTPS dashboard origin to `CLAUDE_MEM_ALLOWED_ORIGINS`
+in settings. Set `CLAUDE_MEM_TAILSCALE_DASHBOARD_ORIGIN` to that same origin in
+the worker process environment, then restart it. This explicit opt-in admits
+My Work and browser actions only for loopback proxy connections with matching
+Host, HTTPS forwarding, a Tailscale user identity, and a matching browser Origin
+when present. Ordinary remote requests and cross-site browser requests remain
+blocked. Tagged devices without a user identity are not admitted to My Work.
+See [Tailscale identity headers](https://tailscale.com/docs/features/tailscale-serve#identity-headers).
+Use a separate tailnet-only Serve port and do not modify existing Funnel routes.
+
 ## Authentication and projection options
 
 The API itself retains upstream defaults: `SYNC_AUTH_MODE=cmem` and

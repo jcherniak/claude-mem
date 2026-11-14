@@ -2,6 +2,8 @@
 
 This fork supports a private PostgreSQL sync server with per-device tokens.
 See [deployment and client configuration](services/sync-api/README.md).
+Set `CLAUDE_MEM_WORKER_MODE=engine-only` in client settings to run capture,
+recall, and sync without the dashboard or My Work background services.
 Hosted premium features are disabled unless the client process environment sets
 `CLAUDE_MEM_PREMIUM_ENABLED=true`. Local device tokens are never used for CMEM
 premium requests, including when this option is enabled.

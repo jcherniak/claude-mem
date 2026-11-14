@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'bun:test';
 import { SettingsRoutes } from '../../src/services/worker/http/routes/SettingsRoutes.js';
 import type { SettingsManager } from '../../src/services/worker/SettingsManager.js';
+import { WORKER_MODES } from '../../src/shared/worker-mode.js';
 
 type SettingsValidator = {
   validateSettings(settings: Record<string, string>): { valid: boolean; error?: string };
@@ -10,6 +11,11 @@ type SettingsValidator = {
 
 describe('SettingsRoutes observer capture validation', () => {
   const routes = () => new SettingsRoutes({} as SettingsManager) as unknown as SettingsValidator;
+
+  it('validates worker modes without requiring a port update', () => {
+    for (const mode of WORKER_MODES) expect(routes().validateSettings({ CLAUDE_MEM_WORKER_MODE: mode }).valid).toBe(true);
+    expect(routes().validateSettings({ CLAUDE_MEM_WORKER_MODE: 'unknown' }).valid).toBe(false);
+  });
 
   it('accepts only explicit string booleans', () => {
     expect(routes().validateSettings({ CLAUDE_MEM_OBSERVER_ENABLED: 'true' }).valid).toBe(true);

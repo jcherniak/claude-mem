@@ -903,6 +903,15 @@ var init_openrouter_base_url = __esm({
   }
 });
 
+// src/shared/worker-mode.ts
+var WORKER_MODES;
+var init_worker_mode = __esm({
+  "src/shared/worker-mode.ts"() {
+    "use strict";
+    WORKER_MODES = ["full", "engine-only"];
+  }
+});
+
 // src/shared/SettingsDefaultsManager.ts
 import { readFileSync as readFileSync5, existsSync as existsSync7, writeFileSync } from "fs";
 import { basename as basename3, dirname as dirname4, join as join8 } from "path";
@@ -973,6 +982,7 @@ var init_SettingsDefaultsManager = __esm({
     init_settings_document();
     init_expand_home();
     init_install_port();
+    init_worker_mode();
     LEGACY_TELEGRAM_TRIGGER_TYPES = "security_alert";
     LEGACY_CLOUD_SYNC_HUB_HOST = "sync-hub.black-pond-afbb.workers.dev";
     DIRECT_SUPABASE_CLOUD_SYNC_HUB_HOST = "ziczmqtpmaxbornfghye.supabase.co";
@@ -1019,6 +1029,7 @@ var init_SettingsDefaultsManager = __esm({
         CLAUDE_MEM_CONTEXT_PROJECTS: "current",
         // 'current' = this checkout only; 'all' = SessionStart context spans every project
         CLAUDE_MEM_WORKER_PORT: String(getDefaultWorkerPort()),
+        CLAUDE_MEM_WORKER_MODE: WORKER_MODES[0],
         CLAUDE_MEM_WORKER_HOST: "127.0.0.1",
         CLAUDE_MEM_WORKER_URL: "",
         CLAUDE_MEM_WORKER_INGEST_TOKEN: "",

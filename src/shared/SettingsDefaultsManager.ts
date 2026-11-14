@@ -9,6 +9,7 @@ import { isOpenRouterApiUrl } from './openrouter-base-url.js';
 import { settingsTarget, withoutStaleRootCopies } from './settings-document.js';
 import { expandHome } from './expand-home.js';
 import { getDefaultServerPort, getDefaultWorkerPort } from './install-port.js';
+import { WORKER_MODES } from './worker-mode.js';
 
 // A fresh settings.json is seeded with EVERY default (see loadFromFile), and
 // persisted values then win over DEFAULTS. So any install created after the
@@ -246,6 +247,7 @@ export interface SettingsDefaults {
   CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES: string;
   CLAUDE_MEM_CONTEXT_PROJECTS: string;
   CLAUDE_MEM_WORKER_PORT: string;
+  CLAUDE_MEM_WORKER_MODE: string;
   CLAUDE_MEM_WORKER_HOST: string;
   CLAUDE_MEM_WORKER_URL: string;
   CLAUDE_MEM_WORKER_INGEST_TOKEN: string;
@@ -548,6 +550,7 @@ export class SettingsDefaultsManager {
     CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES: 'false',
     CLAUDE_MEM_CONTEXT_PROJECTS: 'current', // 'current' = this checkout only; 'all' = SessionStart context spans every project
     CLAUDE_MEM_WORKER_PORT: String(getDefaultWorkerPort()),
+    CLAUDE_MEM_WORKER_MODE: WORKER_MODES[0],
     CLAUDE_MEM_WORKER_HOST: '127.0.0.1',
     CLAUDE_MEM_WORKER_URL: '',
     CLAUDE_MEM_WORKER_INGEST_TOKEN: '',

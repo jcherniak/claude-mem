@@ -12,6 +12,8 @@ import { BaseRouteHandler } from '../BaseRouteHandler.js';
 import { validateBody } from '../middleware/validateBody.js';
 import { SettingsDefaultsManager } from '../../../../shared/SettingsDefaultsManager.js';
 import { premiumFeaturesEnabled } from '../../../../shared/premium-features.js';
+import { WORKER_MODES, type WorkerMode } from '../../../../shared/worker-mode.js';
+import { trustedTailscaleDashboardRequest } from '../tailscale-dashboard.js';
 import { clearPortCache } from '../../../../shared/worker-utils.js';
 import { snapshotDependencyHealth } from '../../../../shared/dependency-health.js';
 import { ensureSettingsDocument, updateSettingsDocument } from '../../../../shared/settings-document.js';
@@ -176,7 +178,8 @@ function splitHostHeader(hostHeader: string): { hostname: string; port: string }
  * as this request. Used to reject settings writes from other localhost pages
  * without adding a new auth scheme. Exported for unit tests.
  */
-export function isForeignLoopbackBrowserWrite(req: Pick<Request, 'headers'>): boolean {
+export function isForeignLoopbackBrowserWrite(req: Pick<Request, 'headers'> & Partial<Pick<Request, 'socket'>>): boolean {
+  if (trustedTailscaleDashboardRequest(req)) return false;
   const rawOrigin = req.headers?.origin;
   if (Array.isArray(rawOrigin)) return true;
   const origin = rawOrigin;
@@ -522,6 +525,10 @@ export class SettingsRoutes extends BaseRouteHandler {
     if (settings.CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES !== undefined
       && !['true', 'false'].includes(settings.CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES)) {
       return { valid: false, error: 'CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES must be "true" or "false"' };
+    }
+
+    if (settings.CLAUDE_MEM_WORKER_MODE !== undefined && !WORKER_MODES.includes(settings.CLAUDE_MEM_WORKER_MODE as WorkerMode)) {
+      return { valid: false, error: `CLAUDE_MEM_WORKER_MODE must be one of: ${WORKER_MODES.join(', ')}` };
     }
 
     if (settings.CLAUDE_MEM_WORKER_PORT) {
