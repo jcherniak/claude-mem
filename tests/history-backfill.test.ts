@@ -67,6 +67,15 @@ describe('explicit historical workflow', () => {
     await expect(runHistoricalBackfill({ ...options, generate: async () => { calls++; return output; } })).rejects.toThrow('snapshot changed');
     expect(calls).toBe(0);
   });
+  it('ends a segment before starting a request without its full time window', async () => {
+    const { options } = fixture([{ role: 'user', text: 'a'.repeat(100000) }, { role: 'assistant', text: 'next chunk' }]);
+    const original = Date.now; let now = original(); let calls = 0;
+    Date.now = () => now;
+    try {
+      const result = await runHistoricalBackfill({ ...options, seconds: 480, generate: async (_prompt, _directory, timeout) => { expect(timeout).toBe(180000); calls++; now += 350000; return output; }, save: async () => {} });
+      expect(result.timeLimited).toBe(true); expect(calls).toBe(1);
+    } finally { Date.now = original; }
+  });
   it('does not send history to a remote or redirected worker URL', async () => {
     const { options } = fixture();
     await expect(runHistoricalBackfill({ ...options, workerUrl: 'https://cmem.ai' })).rejects.toThrow('loopback');

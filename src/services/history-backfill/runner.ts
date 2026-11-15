@@ -117,6 +117,7 @@ export async function runHistoricalBackfill(options: {
   if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) throw new Error('Backfill writes must use a loopback worker URL');
   const journal = new HistoricalJournal(options.directory);
   const deadline = Date.now() + options.seconds * 1000;
+  const requestTimeoutMs = Math.max(1, Math.min(180000, options.seconds * 1000 - 1000));
   const result = { calls: 0, saved: 0, completed: 0, timeLimited: false };
   let lock: Database | undefined;
   try {
@@ -134,13 +135,13 @@ export async function runHistoricalBackfill(options: {
       let bytes = 0;
       const flush = async (): Promise<boolean> => {
         if (!chunk.length && !checkpoint.output) return true;
-        if (Date.now() >= deadline - 1000 || (options.maxCalls > 0 && result.calls >= options.maxCalls)) { result.timeLimited = true; return false; }
+        if (Date.now() >= deadline - 1000 || (!checkpoint.output && result.calls > 0 && Date.now() + requestTimeoutMs > deadline) || (options.maxCalls > 0 && result.calls >= options.maxCalls)) { result.timeLimited = true; return false; }
         if (!checkpoint.output) {
           const prompt = historicalPrompt(snapshot, checkpoint.state, chunk);
           journal.begin(key, position, historicalHash(prompt));
           result.calls++;
           options.report?.(JSON.stringify({ calls: result.calls, saved: result.saved, platform: snapshot.platform, source: snapshot.id, fromEvent: checkpoint.position, toEvent: position }));
-          const generated = await (options.generate ?? generateHistorical)(prompt, options.directory, Math.min(180000, deadline - Date.now()));
+          const generated = await (options.generate ?? generateHistorical)(prompt, options.directory, requestTimeoutMs);
           journal.generated(key, generated);
           checkpoint = journal.checkpoint(key);
         }
